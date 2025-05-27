@@ -41,7 +41,8 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     if (error instanceof Error && error.message.includes('SAFETY')) {
         return { error: "La generación de la imagen fue bloqueada por filtros de seguridad. Intenta con un prompt diferente." };
     }
-    return { error: "Error al generar la imagen con IA." };
+    const errorMessage = error instanceof Error ? error.message : "Error al generar la imagen con IA.";
+    return { error: errorMessage };
   }
 }
 
@@ -59,7 +60,7 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
   
   try {
     const genkitInput: SuggestTagsInput = { prompt: validation.data.prompt };
-    const result = await suggestTagsFlow(genkitInput); // result.tags contains the suggested tags
+    const result = await suggestTagsFlow(genkitInput); 
 
     if (result.tags && result.tags.length > 0) {
       await updateGeneratedImage(validation.data.imageId, { collections: result.tags });
@@ -68,6 +69,7 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     return { success: true, suggestedCollections: result.tags || [] };
   } catch (error) {
     console.error("Error suggesting tags/collections:", error);
-    return { error: "Error al sugerir colecciones." };
+    const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones.";
+    return { error: errorMessage };
   }
 }

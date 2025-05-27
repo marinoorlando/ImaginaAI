@@ -45,8 +45,16 @@ const suggestTagsFlow = ai.defineFlow(
     inputSchema: SuggestTagsInputSchema,
     outputSchema: SuggestTagsOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+  async (input) => {
+    const genkitResponse = await prompt(input);
+    if (!genkitResponse.output) {
+      console.error(
+        'Tag suggestion flow: Genkit prompt did not return a valid output matching schema.',
+        'Input:', input,
+        'Full Genkit Response:', genkitResponse 
+      );
+      throw new Error('La IA no pudo generar sugerencias de colecciones válidas. Revisa los logs del servidor para más detalles.');
+    }
+    return genkitResponse.output;
   }
 );
