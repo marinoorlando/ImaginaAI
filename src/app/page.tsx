@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -20,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { StatisticsDialog } from '@/components/StatisticsDialog'; // Nuevo Import
+import { StatisticsDialog } from '@/components/StatisticsDialog';
 
 export default function HomePage() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
@@ -28,7 +27,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [currentFilters, setCurrentFilters] = useState<{ searchTerm?: string; isFavorite?: true | undefined }>({});
   const [isClearHistoryDialogOpen, setIsClearHistoryDialogOpen] = useState(false);
-  const [isStatisticsDialogOpen, setIsStatisticsDialogOpen] = useState(false); // Nuevo estado
+  const [isStatisticsDialogOpen, setIsStatisticsDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters) => {
@@ -62,14 +61,18 @@ export default function HomePage() {
   const handleToggleFavorite = async (id: string) => {
     try {
       await toggleFavoriteStatus(id);
+      // Optimistic update for immediate UI feedback
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
+      // If favorite filter is active, reload to reflect potential removal/addition from filtered list
       if (currentFilters.isFavorite !== undefined) {
-         loadImages();
+         loadImages(); // This will fetch from DB and update state
       }
     } catch (error) {
       toast({ title: "Error", description: "No se pudo actualizar el estado de favorito.", variant: "destructive" });
+      // Re-fetch to ensure consistency if optimistic update was wrong
+      loadImages();
     }
   };
 
@@ -86,11 +89,15 @@ export default function HomePage() {
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
+       // Optimistic update
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
+      // No need to call loadImages() if only tags changed and no tag filter is active.
+      // If tag filtering becomes a feature, then loadImages might be needed here.
     } catch (error) {
       toast({ title: "Error", description: "No se pudieron actualizar las etiquetas manuales.", variant: "destructive" });
+      loadImages(); // Re-fetch on error
     }
   };
 
@@ -101,12 +108,7 @@ export default function HomePage() {
         img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
       )
     );
-     // Optionally, you might want to re-save to DB here if this function implies a permanent change.
-     // For now, assuming this is mostly for UI consistency after an AI suggestion on an existing image.
-     updateGeneratedImage(id, { collections: newCollections }).catch(err => {
-      console.error("Error saving updated collections to DB:", err);
-      toast({ title: "Error", description: "No se pudieron guardar las colecciones actualizadas.", variant: "destructive" });
-    });
+     // The DB update is handled client-side in ImageCard after suggestTagsAction
   };
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
@@ -136,13 +138,14 @@ export default function HomePage() {
       const allImages = await getAllGeneratedImages();
       if (allImages.length === 0) {
         toast({ title: "Historial Vacío", description: "No hay imágenes para exportar." });
+        setIsLoading(false);
         return;
       }
 
       const exportedImages: ExportedGeneratedImage[] = await Promise.all(
         allImages.map(async (img) => ({
           ...img,
-          imageData: await blobToDataURI(img.imageData), // Convert Blob to Data URI
+          imageData: await blobToDataURI(img.imageData), 
           createdAt: img.createdAt.toISOString(),
           updatedAt: img.updatedAt.toISOString(),
         }))
@@ -189,14 +192,13 @@ export default function HomePage() {
       let skippedCount = 0;
 
       for (const item of importedData) {
-        // Basic validation of item structure
         if (typeof item.id !== 'string' || typeof item.prompt !== 'string' || typeof item.imageData !== 'string') {
             console.warn("Skipping invalid item during import:", item);
             skippedCount++;
             continue;
         }
         try {
-            const imageBlob = await dataURIToBlob(item.imageData); // Convert Data URI back to Blob
+            const imageBlob = await dataURIToBlob(item.imageData); 
             const newImage: GeneratedImage = {
               id: item.id,
               prompt: item.prompt,
@@ -207,24 +209,29 @@ export default function HomePage() {
               isFavorite: typeof item.isFavorite === 'boolean' ? item.isFavorite : false,
               createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
               updatedAt: item.updatedAt ? new Date(item.updatedAt) : new Date(),
-              artisticStyle: typeof item.artisticStyle === 'string' ? item.artisticStyle : undefined,
-              aspectRatio: typeof item.aspectRatio === 'string' ? item.aspectRatio : undefined,
-              imageQuality: typeof item.imageQuality === 'string' ? item.imageQuality : undefined,
+              artisticStyle: typeof item.artisticStyle === 'string' ? item.artisticStyle : 'none',
+              aspectRatio: typeof item.aspectRatio === 'string' ? item.aspectRatio : '1:1',
+              imageQuality: typeof item.imageQuality === 'string' ? item.imageQuality : 'standard',
               width: typeof item.width === 'number' ? item.width : undefined,
               height: typeof item.height === 'number' ? item.height : undefined,
             };
             await addGeneratedImage(newImage);
             importedCount++;
-        } catch (addError) {
-            console.error(`Error adding imported image ${item.id}:`, addError);
-            skippedCount++;
+        } catch (addError: any) {
+             if (addError?.name === 'ConstraintError') {
+                console.warn(`Image with ID ${item.id} already exists. Skipping.`);
+                skippedCount++;
+            } else {
+                console.error(`Error adding imported image ${item.id}:`, addError);
+                skippedCount++;
+            }
         }
       }
       
-      loadImages(); // Refresh the grid
+      loadImages(); 
       toast({ 
         title: "Importación Completada", 
-        description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas por error o formato.` : ''}` 
+        description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas (duplicadas o error).` : ''}` 
       });
 
     } catch (error) {
@@ -233,7 +240,6 @@ export default function HomePage() {
       toast({ title: "Error de Importación", description: message, variant: "destructive" });
     } finally {
       setIsLoading(false);
-      // Reset file input to allow importing the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -250,7 +256,7 @@ export default function HomePage() {
         onClearHistory={openClearHistoryDialog}
         onExportHistory={handleExportHistory}
         onImportHistory={handleImportHistory}
-        onShowStatistics={openStatisticsDialog} // Nueva prop
+        onShowStatistics={openStatisticsDialog}
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -299,7 +305,7 @@ export default function HomePage() {
       <StatisticsDialog
         open={isStatisticsDialogOpen}
         onOpenChange={setIsStatisticsDialogOpen}
-        images={images} // Pasar las imágenes al diálogo
+        images={images}
       />
 
       <input

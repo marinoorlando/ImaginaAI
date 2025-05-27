@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -6,7 +5,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText } from 'lucide-react'; // Added FileText
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
@@ -37,12 +36,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ImageDetailsDialog } from './ImageDetailsDialog'; // New Import
 
 interface ImageCardProps {
   image: GeneratedImage;
-  onToggleFavorite: (id: string) => void;
+  onToggleFavorite: (id: string) => Promise<void>; // Ensure props are async if parent functions are
   onDelete: (id: string) => void;
-  onUpdateTags: (id: string, newTags: string[]) => void;
+  onUpdateTags: (id: string, newTags: string[]) => Promise<void>; // Ensure props are async
   onCollectionsUpdated: (id: string, newCollections: string[]) => void;
   onImageGenerated: (image: GeneratedImage) => void; 
 }
@@ -77,7 +77,6 @@ const imageQualitiesList = [
   { value: 'draft', label: 'Borrador' },
   { value: 'standard', label: 'Estándar' },
   { value: 'high', label: 'Alta' },
-  // { value: 'ultra', label: 'Ultra Alta' },
 ];
 
 
@@ -94,18 +93,24 @@ export function ImageCard({
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false); // New state for details dialog
 
   useEffect(() => {
+    let objectUrl: string | null = null;
     if (image.imageData instanceof Blob) {
-      const url = URL.createObjectURL(image.imageData);
-      setImageUrl(url);
+      objectUrl = URL.createObjectURL(image.imageData);
+      setImageUrl(objectUrl);
       setIsLoadingImageUrl(false);
-      return () => URL.revokeObjectURL(url);
     } else {
       console.warn(`Image data for ${image.id} is not a Blob:`, image.imageData);
       setIsLoadingImageUrl(false);
       setImageUrl(null); 
     }
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [image.imageData, image.id]);
 
   const handleDownload = () => {
@@ -129,36 +134,32 @@ export function ImageCard({
   };
 
   const handleSuggestCollections = async () => {
-    console.log(`[ImageCard] handleSuggestCollections called for imageId: ${image.id}, prompt: ${image.prompt}`);
     if (!image.prompt) {
       toast({ title: "Error", description: "El prompt de la imagen está vacío, no se pueden sugerir colecciones.", variant: "destructive"});
       return;
     }
     setIsSuggestingTags(true);
+    console.log(`[ImageCard] Requesting AI suggestions for imageId: ${image.id}, prompt: ${image.prompt}`);
     try {
       const result = await suggestTagsAction({ prompt: image.prompt });
-      console.log(`[ImageCard] Result from suggestTagsAction for imageId ${image.id}:`, result);
+      console.log(`[ImageCard] AI Suggestion Result for imageId ${image.id}:`, result);
 
       if (result.error) {
         toast({ title: "Error al Sugerir Colecciones", description: result.error, variant: "destructive" });
-        return;
-      }
-
-      if (result.success && result.suggestedCollections) {
+      } else if (result.success && result.suggestedCollections) {
         // Update DB from client-side
         await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
-        onCollectionsUpdated(image.id, result.suggestedCollections); // Update local state for immediate UI feedback
+        onCollectionsUpdated(image.id, result.suggestedCollections); 
         
         if (result.suggestedCollections.length > 0) {
             toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
         } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado." });
+            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones o las existentes ya son las mejores." });
         }
       } else {
-        console.error(`[ImageCard] Unexpected: No error but no suggested collections from suggestTagsAction for imageId ${image.id}:`, result);
         toast({ 
-            title: "Error al Sugerir Colecciones", 
-            description: "No se pudieron obtener sugerencias de la IA.", 
+            title: "Respuesta Inesperada", 
+            description: "No se pudieron obtener sugerencias de la IA o hubo un problema al guardarlas.", 
             variant: "destructive" 
         });
       }
@@ -184,7 +185,7 @@ export function ImageCard({
         artisticStyle: image.artisticStyle || 'none',
         aspectRatio: image.aspectRatio || '1:1',
         imageQuality: image.imageQuality || 'standard',
-        initialTags: image.tags, // Pass original tags
+        initialTags: image.tags, 
       });
 
       if (result.error) {
@@ -204,7 +205,7 @@ export function ImageCard({
           artisticStyle: result.artisticStyle || 'none', 
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags, // Use tags from action result (which includes initialTags)
+          tags: result.tags, 
           collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false, 
@@ -231,13 +232,13 @@ export function ImageCard({
 
   return (
     <TooltipProvider>
-      <Dialog>
-        <Card className="flex flex-col overflow-hidden shadow-lg h-full">
-          <CardHeader className="p-4">
-            <CardTitle className="text-sm font-semibold truncate" title={image.prompt}>
-              {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
-            </CardTitle>
-          </CardHeader>
+      <Card className="flex flex-col overflow-hidden shadow-lg h-full">
+        <CardHeader className="p-4">
+          <CardTitle className="text-sm font-semibold truncate" title={image.prompt}>
+            {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
+          </CardTitle>
+        </CardHeader>
+        <Dialog> {/* This Dialog is for image zoom */}
           <CardContent className="p-0 relative aspect-square flex-grow">
             {isLoadingImageUrl ? (
               <Skeleton className="w-full h-full" />
@@ -263,142 +264,161 @@ export function ImageCard({
               </div>
             )}
           </CardContent>
-          <div className="p-4 space-y-3">
-            <div>
-              {image.tags && image.tags.length > 0 && (
-                <>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Etiquetas:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {image.tags.slice(0, 3).map(tag => (
-                      <Badge key={`tag-${tag}`} variant="secondary" className="text-xs">{tag}</Badge>
-                    ))}
-                    {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
-                  </div>
-                </>
+          <DialogContent className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] xl:max-w-[50vw] p-2">
+            <DialogHeader className="p-2 border-b">
+              <DialogTitle className="text-sm truncate">{image.prompt}</DialogTitle>
+            </DialogHeader>
+            <div className="relative aspect-video max-h-[80vh]">
+              {imageUrl && (
+                <Image
+                  src={imageUrl}
+                  alt={image.prompt}
+                  fill={true}
+                  style={{objectFit: "contain"}}
+                />
               )}
             </div>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Colecciones (IA):</p>
-              {(image.collections && image.collections.length > 0) ? (
-                <>
-                  <div className="flex flex-wrap gap-1">
-                    {(image.collections || []).slice(0, 3).map(col => (
-                      <Badge key={`col-${col}`} variant="outline" className="text-xs border-primary text-primary">{col}</Badge>
-                    ))}
-                  </div>
-                  {(image.collections || []).length > 3 && (
-                    <div className="mt-1">
-                      <Badge variant="outline" className="text-xs">+{ (image.collections || []).length - 3}</Badge>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Ninguna sugerida aún.</p>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
-            {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {getLabel(artisticStylesList, image.artisticStyle)}</p>}
-            {image.aspectRatio && <p className="text-xs text-muted-foreground">Aspecto: {getLabel(aspectRatiosList, image.aspectRatio)}</p>}
-            {image.imageQuality && <p className="text-xs text-muted-foreground">Calidad: {getLabel(imageQualitiesList, image.imageQuality)}</p>}
-            <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
-          </div>
-          <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => onToggleFavorite(image.id)}>
-                  <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-                  <span className="sr-only">{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</p></TooltipContent>
-            </Tooltip>
+          </DialogContent>
+        </Dialog> {/* End of image zoom Dialog */}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleDownload}>
-                  <Download className="h-4 w-4" />
-                  <span className="sr-only">Descargar Imagen</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Descargar Imagen</p></TooltipContent>
-            </Tooltip>
-            
-            <AlertDialog>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Eliminar Imagen</span>
-                    </Button>
-                  </AlertDialogTrigger>
-                </TooltipTrigger>
-                <TooltipContent><p>Eliminar Imagen</p></TooltipContent>
-              </Tooltip>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Esto eliminará permanentemente la imagen de tu historial.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onDelete(image.id)} className="bg-destructive hover:bg-destructive/90">
-                    Eliminar
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleCopyPrompt}>
-                  <Copy className="h-4 w-4" />
-                  <span className="sr-only">Copiar Prompt</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Copiar Prompt</p></TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleSuggestCollections} disabled={isSuggestingTags}>
-                  {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                  <span className="sr-only">Sugerir Colecciones (IA)</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Sugerir Colecciones (IA)</p></TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleRegenerate} disabled={isRegenerating}>
-                  {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  <span className="sr-only">Regenerar como Nueva Imagen</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Regenerar como Nueva Imagen</p></TooltipContent>
-            </Tooltip>
-          </CardFooter>
-        </Card>
-        <DialogContent className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] xl:max-w-[50vw] p-2">
-          <DialogHeader className="p-2 border-b">
-            <DialogTitle className="text-sm truncate">{image.prompt}</DialogTitle>
-          </DialogHeader>
-          <div className="relative aspect-video max-h-[80vh]">
-            {imageUrl && (
-              <Image
-                src={imageUrl}
-                alt={image.prompt}
-                fill={true}
-                style={{objectFit: "contain"}}
-              />
+        <div className="p-4 space-y-3">
+          <div>
+            {image.tags && image.tags.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Etiquetas:</p>
+                <div className="flex flex-wrap gap-1">
+                  {image.tags.slice(0, 3).map(tag => (
+                    <Badge key={`tag-${tag}`} variant="secondary" className="text-xs">{tag}</Badge>
+                  ))}
+                  {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
+                </div>
+              </>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-1">Colecciones (IA):</p>
+            {(image.collections && image.collections.length > 0) ? (
+              <>
+                <div className="flex flex-wrap gap-1">
+                  {(image.collections || []).slice(0, 3).map(col => (
+                    <Badge key={`col-${col}`} variant="outline" className="text-xs border-primary text-primary">{col}</Badge>
+                  ))}
+                </div>
+                {(image.collections || []).length > 3 && (
+                  <div className="mt-1">
+                    <Badge variant="outline" className="text-xs">+{ (image.collections || []).length - 3}</Badge>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">Ninguna sugerida aún.</p>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
+          {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {getLabel(artisticStylesList, image.artisticStyle)}</p>}
+          {image.aspectRatio && <p className="text-xs text-muted-foreground">Aspecto: {getLabel(aspectRatiosList, image.aspectRatio)}</p>}
+          {image.imageQuality && <p className="text-xs text-muted-foreground">Calidad: {getLabel(imageQualitiesList, image.imageQuality)}</p>}
+          <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
+        </div>
+        <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => onToggleFavorite(image.id)}>
+                <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                <span className="sr-only">{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</p></TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleDownload}>
+                <Download className="h-4 w-4" />
+                <span className="sr-only">Descargar Imagen</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Descargar Imagen</p></TooltipContent>
+          </Tooltip>
+          
+          <AlertDialog>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Eliminar Imagen</span>
+                  </Button>
+                </AlertDialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent><p>Eliminar Imagen</p></TooltipContent>
+            </Tooltip>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción no se puede deshacer. Esto eliminará permanentemente la imagen de tu historial.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete(image.id)} className="bg-destructive hover:bg-destructive/90">
+                  Eliminar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleCopyPrompt}>
+                <Copy className="h-4 w-4" />
+                <span className="sr-only">Copiar Prompt</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Copiar Prompt</p></TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleSuggestCollections} disabled={isSuggestingTags}>
+                {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                <span className="sr-only">Sugerir Colecciones (IA)</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Sugerir Colecciones (IA)</p></TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleRegenerate} disabled={isRegenerating}>
+                {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                <span className="sr-only">Regenerar como Nueva Imagen</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Regenerar como Nueva Imagen</p></TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => setIsDetailsDialogOpen(true)}>
+                <FileText className="h-4 w-4" />
+                <span className="sr-only">Ver Detalles y Editar</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Ver Detalles y Editar</p></TooltipContent>
+          </Tooltip>
+        </CardFooter>
+      </Card>
+      
+      {/* ImageDetailsDialog is rendered here, controlled by its own open state */}
+      <ImageDetailsDialog
+        image={image}
+        open={isDetailsDialogOpen}
+        onOpenChange={setIsDetailsDialogOpen}
+        onUpdateTags={onUpdateTags}
+        onToggleFavorite={onToggleFavorite}
+      />
     </TooltipProvider>
   );
 }
-
