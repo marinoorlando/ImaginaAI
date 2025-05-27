@@ -21,27 +21,46 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
   }
 
   const { prompt } = validation.data;
+  let suggestedCollections: string[] = [];
 
   try {
-    const genkitInput: GenkitImageInput = { prompt };
-    const genkitResult = await generateImageWithGenkitFlow(genkitInput);
+    // 1. Generate the image
+    console.log("[generateImageAction] Calling generateImageWithGenkitFlow with prompt:", prompt);
+    const genkitResult = await generateImageWithGenkitFlow({ prompt });
+    console.log("[generateImageAction] Result from generateImageWithGenkitFlow:", genkitResult);
+
+    // 2. Suggest collections (tags) for the generated image
+    try {
+      console.log("[generateImageAction] Calling suggestTagsFlow with prompt for auto-suggestion:", prompt);
+      const tagsResult = await suggestTagsFlow({ prompt });
+      console.log("[generateImageAction] Result from suggestTagsFlow (auto-suggestion):", tagsResult);
+      if (tagsResult.tags && tagsResult.tags.length > 0) {
+        suggestedCollections = tagsResult.tags;
+        console.log("[generateImageAction] Auto-suggested collections:", suggestedCollections);
+      } else {
+        console.log("[generateImageAction] No collections auto-suggested by AI or tags array is empty.");
+      }
+    } catch (tagsError) {
+      console.error("[generateImageAction] Error auto-suggesting collections with Genkit, proceeding without them:", tagsError);
+      // Continue without AI collections if suggestion fails, image is already generated
+    }
     
     return { 
       success: true, 
       imageDataUri: genkitResult.imageDataUri,
       id: uuidv4(),
       prompt: prompt,
-      collections: [], // Initialize collections as empty array
+      collections: suggestedCollections, // Include auto-suggested collections
       modelUsed: genkitResult.modelUsed,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.error("Error generating image with Genkit:", error);
+    console.error("[generateImageAction] Error generating image or suggesting tags with Genkit:", error);
     if (error instanceof Error && error.message.includes('SAFETY')) {
         return { error: "La generación de la imagen fue bloqueada por filtros de seguridad. Intenta con un prompt diferente." };
     }
-    const errorMessage = error instanceof Error ? error.message : "Error al generar la imagen con IA.";
+    const errorMessage = error instanceof Error ? error.message : "Error al generar la imagen o sugerir colecciones con IA.";
     return { error: errorMessage };
   }
 }
@@ -80,12 +99,13 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
       console.log("[suggestTagsAction] No tags returned from AI or tags array is empty.");
     }
     
-    const suggestedCollections = result.tags || [];
-    console.log("[suggestTagsAction] Returning success with suggestedCollections:", suggestedCollections);
-    return { success: true, suggestedCollections: suggestedCollections };
+    const suggestedCollectionsResult = result.tags || [];
+    console.log("[suggestTagsAction] Returning success with suggestedCollections:", suggestedCollectionsResult);
+    return { success: true, suggestedCollections: suggestedCollectionsResult }; // Ensure key matches what ImageCard expects
   } catch (error) {
     console.error("[suggestTagsAction] Error in suggestTagsAction:", error);
     const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones.";
     return { error: errorMessage };
   }
 }
+
