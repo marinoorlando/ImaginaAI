@@ -41,14 +41,13 @@ export default function HomePage() {
   }, [toast, currentFilters]); 
 
   useEffect(() => {
-    // Load images with initial (empty) filters, which means isFavorite will be undefined
     loadImages(currentFilters);
-  }, [loadImages]); // loadImages depends on currentFilters, so this is fine
+  }, [loadImages]);
 
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
       await addGeneratedImage(newImage);
-      loadImages(); // Reload images with current filters
+      loadImages(); 
     } catch (error) {
       toast({ title: "Error", description: "No se pudo guardar la imagen.", variant: "destructive" });
     }
@@ -57,12 +56,9 @@ export default function HomePage() {
   const handleToggleFavorite = async (id: string) => {
     try {
       await toggleFavoriteStatus(id);
-      // Optimistic update or reload:
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
-      // If current filter is active (e.g., "show only favorites"), reloading might be better
-      // to ensure the list correctly reflects the change based on the filter.
       if (currentFilters.isFavorite !== undefined) {
          loadImages();
       }
@@ -81,18 +77,28 @@ export default function HomePage() {
     }
   };
   
+  // Handles updates to manual tags
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
-      // Optimistic update or reload:
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
-      // loadImages(); // Consider if a reload is needed if tags affect current filtering
     } catch (error) {
-      toast({ title: "Error", description: "No se pudieron actualizar las etiquetas.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudieron actualizar las etiquetas manuales.", variant: "destructive" });
     }
   };
+
+  // Handles updates to AI-suggested collections
+  const handleCollectionsUpdated = (id: string, newCollections: string[]) => {
+    setImages(prevImages =>
+      prevImages.map(img =>
+        img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
+      )
+    );
+    // No toast here as suggestTagsAction already updates DB and ImageCard shows toast.
+  };
+
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
@@ -107,7 +113,7 @@ export default function HomePage() {
     try {
       await clearAllImages();
       toast({ title: "Historial Eliminado", description: "Todas las imágenes han sido eliminadas." });
-      setImages([]); // Clear images in state immediately
+      setImages([]); 
     } catch (error) {
       toast({ title: "Error", description: "No se pudo eliminar el historial.", variant: "destructive" });
     } finally {
@@ -131,7 +137,8 @@ export default function HomePage() {
               images={images} 
               onToggleFavorite={handleToggleFavorite}
               onDeleteImage={handleDeleteImage}
-              onUpdateTags={handleUpdateTags}
+              onUpdateTags={handleUpdateTags} // For manual tags
+              onCollectionsUpdated={handleCollectionsUpdated} // For AI collections
               isLoading={isLoading}
             />
           </div>

@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
-  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
+  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }), // This validates manual tags
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -30,7 +30,7 @@ interface GenerationFormProps {
 
 export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const { toast } = useToast();
-  const [currentTags, setCurrentTags] = useState<string[]>([]);
+  const [currentTags, setCurrentTags] = useState<string[]>([]); // For manual tags
   const [tagInput, setTagInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -45,7 +45,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const promptValue = watch('prompt');
 
   useEffect(() => {
-    setValue('tags', currentTags.join(','), { shouldValidate: true });
+    // Update RHF's 'tags' field when currentTags (manual tags) changes
+    setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 });
   }, [currentTags, setValue]);
 
   const handleTagInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,8 +71,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   async function onSubmit(data: FormData) {
     setIsGenerating(true);
     try {
-      // The 'artisticStyle' is part of GenerateImageServerInputSchema but not strictly used by the Genkit flow yet.
-      // We pass it as undefined for now.
       const result = await generateImageAction({ prompt: data.prompt, artisticStyle: undefined });
 
       if (result.error) {
@@ -84,7 +83,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
       }
 
       if (result.success && result.imageDataUri) {
-        // Convert data URI to Blob
         const fetchRes = await fetch(result.imageDataUri);
         if (!fetchRes.ok) {
           throw new Error(`Failed to process image data URI: ${fetchRes.statusText}`);
@@ -95,12 +93,12 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
-          tags: currentTags,
+          tags: currentTags, // Manual tags
+          collections: result.collections || [], // AI-suggested collections, initialized empty
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
-          // originalUrl is not set here as we have the data URI then blob
         };
 
         onImageGenerated(newImage);
@@ -111,7 +109,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         reset(); 
         setCurrentTags([]); 
       } else if (result.success && !result.imageDataUri) {
-        // Should not happen if success is true, but as a safeguard
         throw new Error("Image generation reported success but no image data was returned.");
       }
     } catch (error) {
@@ -155,14 +152,15 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="tags-input">Etiquetas (separadas por coma o Enter)</Label>
+            <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
-                <input type="hidden" {...register("tags")} />
+                {/* This hidden input is managed by RHF through setValue in useEffect */}
+                <input type="hidden" {...register("tags")} /> 
                 <Input
                     id="tags-input"
                     type="text"
-                    placeholder="Añade etiquetas..."
+                    placeholder="Añade etiquetas manuales..."
                     value={tagInput}
                     onChange={handleTagInputChange}
                     onKeyDown={handleTagInputKeyDown}

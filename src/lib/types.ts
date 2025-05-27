@@ -4,6 +4,7 @@ export interface GeneratedImage {
   imageData: Blob;
   prompt: string;
   tags: string[];
+  collections?: string[]; // AI-suggested tags, called "colecciones"
   modelUsed: string;
   isFavorite: boolean; // Stored as 0 or 1 in IndexedDB for easier indexing if needed, but boolean here is fine.
   createdAt: Date;
@@ -30,3 +31,4 @@ export interface AiModel {
   apiKey?: string; // Simulated
   // Add other model-specific properties if needed
 }
+

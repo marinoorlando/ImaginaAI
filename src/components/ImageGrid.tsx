@@ -10,11 +10,12 @@ interface ImageGridProps {
   images: GeneratedImage[];
   onToggleFavorite: (id: string) => void;
   onDeleteImage: (id: string) => void;
-  onUpdateTags: (id: string, newTags: string[]) => void;
+  onUpdateTags: (id: string, newTags: string[]) => void; // For manual tags
+  onCollectionsUpdated: (id: string, newCollections: string[]) => void; // For AI collections
   isLoading?: boolean;
 }
 
-export function ImageGrid({ images, onToggleFavorite, onDeleteImage, onUpdateTags, isLoading }: ImageGridProps) {
+export function ImageGrid({ images, onToggleFavorite, onDeleteImage, onUpdateTags, onCollectionsUpdated, isLoading }: ImageGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -43,7 +44,8 @@ export function ImageGrid({ images, onToggleFavorite, onDeleteImage, onUpdateTag
           image={image} 
           onToggleFavorite={onToggleFavorite}
           onDelete={onDeleteImage}
-          onUpdateTags={onUpdateTags}
+          onUpdateTags={onUpdateTags} // For manual tags
+          onCollectionsUpdated={onCollectionsUpdated} // For AI collections
         />
       ))}
     </div>

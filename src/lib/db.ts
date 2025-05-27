@@ -7,14 +7,12 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(2).stores({ // Incremented version to 2
-      generatedImages: 'id, prompt, *tags, modelUsed, isFavorite, createdAt, updatedAt',
-      // Changed &tags to *tags to allow non-unique tags.
-      // '&tags' creates a unique multiEntry index.
-      // '*tags' creates a non-unique multiEntry index.
+    this.version(3).stores({ // Incremented version to 3
+      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt',
+      // Added *collections for AI-suggested tags
     });
-    // The previous version 1 schema definition is implicitly handled by Dexie's upgrade process.
-    // If version 1 existed with '&tags', Dexie will attempt to migrate to version 2 with '*tags'.
+    // Dexie handles upgrading from previous versions.
+    // Old entries won't have 'collections', it will be undefined.
   }
 }
 
@@ -24,7 +22,14 @@ export const db = new ImaginaAiDexie();
 
 export async function addGeneratedImage(image: GeneratedImage): Promise<string> {
   try {
-    return await db.generatedImages.add(image);
+    const imageToAdd: GeneratedImage = {
+      ...image,
+      tags: image.tags || [],
+      collections: image.collections || [], // Ensure collections is initialized
+      createdAt: image.createdAt || new Date(),
+      updatedAt: image.updatedAt || new Date(),
+    };
+    return await db.generatedImages.add(imageToAdd);
   } catch (error) {
     console.error("Failed to add image to IndexedDB:", error);
     throw error;
@@ -53,7 +58,7 @@ export async function getGeneratedImageById(id: string): Promise<GeneratedImage 
   }
 }
 
-export async function updateGeneratedImage(id: string, changes: Partial<GeneratedImage>): Promise<number> {
+export async function updateGeneratedImage(id: string, changes: Partial<Omit<GeneratedImage, 'id' | 'imageData'>>): Promise<number> {
   try {
     return await db.generatedImages.update(id, { ...changes, updatedAt: new Date() });
   } catch (error) {
@@ -81,17 +86,17 @@ export async function toggleFavoriteStatus(id: string): Promise<number> {
 
 export async function filterImages({
   searchTerm,
-  tags,
+  tags, // This refers to manual tags for filtering
   isFavorite,
 }: {
   searchTerm?: string;
-  tags?: string[];
-  isFavorite?: boolean;
+  tags?: string[]; // Manual tags
+  isFavorite?: true | undefined; // Changed boolean to true | undefined
 }): Promise<GeneratedImage[]> {
   try {
     let collection = db.generatedImages.orderBy('createdAt').reverse();
 
-    if (isFavorite !== undefined) {
+    if (isFavorite !== undefined) { // Check if isFavorite is explicitly true or false
       collection = collection.filter(img => img.isFavorite === isFavorite);
     }
 
@@ -99,10 +104,12 @@ export async function filterImages({
       const lowerSearchTerm = searchTerm.toLowerCase();
       collection = collection.filter(img => 
         img.prompt.toLowerCase().includes(lowerSearchTerm) ||
-        img.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm))
+        img.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)) ||
+        (img.collections && img.collections.some(col => col.toLowerCase().includes(lowerSearchTerm)))
       );
     }
     
+    // This filter is for manual tags. If filtering by collections is needed, it should be a separate param.
     if (tags && tags.length > 0) {
       collection = collection.filter(img => 
         tags.every(filterTag => img.tags.includes(filterTag))

@@ -5,9 +5,10 @@ import { suggestTags as suggestTagsFlow, type SuggestTagsInput } from "@/ai/flow
 import { generateImage as generateImageWithGenkitFlow, type GenerateImageInput as GenkitImageInput } from "@/ai/flows/generate-image-flow";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
+import { updateGeneratedImage } from "@/lib/db"; // Import updateGeneratedImage
 
 
-const GenerateImageServerInputSchema = z.object({ // Renamed to avoid conflict if client-side schema differs
+const GenerateImageServerInputSchema = z.object({
   prompt: z.string().min(1, "El prompt es requerido."),
   artisticStyle: z.string().optional(),
 });
@@ -19,7 +20,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
 
-  const { prompt } = validation.data; // artisticStyle is not used by the current Genkit flow
+  const { prompt } = validation.data;
 
   try {
     const genkitInput: GenkitImageInput = { prompt };
@@ -27,16 +28,16 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     
     return { 
       success: true, 
-      imageDataUri: genkitResult.imageDataUri, // Return data URI
+      imageDataUri: genkitResult.imageDataUri,
       id: uuidv4(),
       prompt: prompt,
+      collections: [], // Initialize collections as empty array
       modelUsed: genkitResult.modelUsed,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   } catch (error) {
     console.error("Error generating image with Genkit:", error);
-    // Check if the error is a Genkit/Google AI specific error for more user-friendly messages
     if (error instanceof Error && error.message.includes('SAFETY')) {
         return { error: "La generación de la imagen fue bloqueada por filtros de seguridad. Intenta con un prompt diferente." };
     }
@@ -46,6 +47,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
 
 
 const SuggestTagsServerInputSchema = z.object({
+  imageId: z.string().min(1, "El ID de la imagen es requerido."),
   prompt: z.string().min(1, "El prompt es requerido para sugerir etiquetas."),
 });
 
@@ -57,10 +59,15 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
   
   try {
     const genkitInput: SuggestTagsInput = { prompt: validation.data.prompt };
-    const result = await suggestTagsFlow(genkitInput);
-    return { success: true, tags: result.tags };
+    const result = await suggestTagsFlow(genkitInput); // result.tags contains the suggested tags
+
+    if (result.tags && result.tags.length > 0) {
+      await updateGeneratedImage(validation.data.imageId, { collections: result.tags });
+    }
+    
+    return { success: true, suggestedCollections: result.tags || [] };
   } catch (error) {
-    console.error("Error suggesting tags:", error);
-    return { error: "Error al sugerir etiquetas." };
+    console.error("Error suggesting tags/collections:", error);
+    return { error: "Error al sugerir colecciones." };
   }
 }

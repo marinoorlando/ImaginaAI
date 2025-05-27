@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, Edit3, AlertTriangle, Loader2 } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, Edit3, AlertTriangle, Loader2, Tags, Wand2 } from 'lucide-react'; // Added Tags, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction } from '@/actions/imageActions';
@@ -33,14 +33,15 @@ interface ImageCardProps {
   image: GeneratedImage;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdateTags: (id: string, newTags: string[]) => void;
+  onUpdateTags: (id: string, newTags: string[]) => void; // For manual tags
+  onCollectionsUpdated: (id: string, newCollections: string[]) => void; // For AI collections
 }
 
-export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: ImageCardProps) {
+export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onCollectionsUpdated }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
-  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false); // Now for "collections"
 
   useEffect(() => {
     if (image.imageData) {
@@ -73,19 +74,18 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
       .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt.", variant: "destructive" }));
   };
 
-  const handleSuggestTags = async () => {
+  const handleSuggestCollections = async () => { // Renamed for clarity
     setIsSuggestingTags(true);
     try {
-      const result = await suggestTagsAction({ prompt: image.prompt });
-      if (result.success && result.tags) {
-        const updatedTags = Array.from(new Set([...image.tags, ...result.tags]));
-        onUpdateTags(image.id, updatedTags);
-        toast({ title: "Etiquetas Sugeridas", description: "Se añadieron nuevas etiquetas." });
+      const result = await suggestTagsAction({ imageId: image.id, prompt: image.prompt });
+      if (result.success && result.suggestedCollections) {
+        onCollectionsUpdated(image.id, result.suggestedCollections); // Update parent state
+        toast({ title: "Colecciones Sugeridas", description: "Se añadieron nuevas colecciones (IA)." });
       } else {
         toast({ title: "Error al Sugerir", description: result.error || "No se pudieron obtener sugerencias.", variant: "destructive" });
       }
     } catch (error) {
-      toast({ title: "Error", description: "Ocurrió un problema al sugerir etiquetas.", variant: "destructive" });
+      toast({ title: "Error", description: "Ocurrió un problema al sugerir colecciones.", variant: "destructive" });
     } finally {
       setIsSuggestingTags(false);
     }
@@ -97,6 +97,8 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
       description: `${feature} estará disponible pronto.`,
     });
   };
+
+  // TODO: Implement manual tag editing UI if needed. For now, onUpdateTags is passed but not directly used by a button here.
 
   return (
     <TooltipProvider>
@@ -124,14 +126,34 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
             </div>
           )}
         </CardContent>
-        <div className="p-4 space-y-2">
-          <div className="flex flex-wrap gap-1">
-            {image.tags.slice(0, 3).map(tag => (
-              <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-            ))}
-            {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
+        <div className="p-4 space-y-3">
+          <div>
+            {image.tags && image.tags.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Etiquetas:</p>
+                <div className="flex flex-wrap gap-1">
+                  {image.tags.slice(0, 3).map(tag => (
+                    <Badge key={`tag-${tag}`} variant="secondary" className="text-xs">{tag}</Badge>
+                  ))}
+                  {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
+                </div>
+              </>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">Modelo: {image.modelUsed}</p>
+          <div>
+            {(image.collections && image.collections.length > 0) && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Colecciones (IA):</p>
+                <div className="flex flex-wrap gap-1">
+                  {(image.collections || []).slice(0, 3).map(col => (
+                    <Badge key={`col-${col}`} variant="outline" className="text-xs border-blue-500 text-blue-700">{col}</Badge>
+                  ))}
+                  {(image.collections || []).length > 3 && <Badge variant="outline" className="text-xs">+{ (image.collections || []).length - 3}</Badge>}
+                </div>
+              </>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
           <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
         </div>
         <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
@@ -142,9 +164,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
                 <span className="sr-only">{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</p>
-            </TooltipContent>
+            <TooltipContent><p>{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</p></TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -154,9 +174,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
                 <span className="sr-only">Descargar Imagen</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Descargar Imagen</p>
-            </TooltipContent>
+            <TooltipContent><p>Descargar Imagen</p></TooltipContent>
           </Tooltip>
           
           <AlertDialog>
@@ -169,9 +187,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
                   </Button>
                 </AlertDialogTrigger>
               </TooltipTrigger>
-              <TooltipContent>
-                <p>Eliminar Imagen</p>
-              </TooltipContent>
+              <TooltipContent><p>Eliminar Imagen</p></TooltipContent>
             </Tooltip>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -196,21 +212,17 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
                 <span className="sr-only">Copiar Prompt</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Copiar Prompt</p>
-            </TooltipContent>
+            <TooltipContent><p>Copiar Prompt</p></TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={handleSuggestTags} disabled={isSuggestingTags}>
-                {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
-                <span className="sr-only">Sugerir Etiquetas</span>
+              <Button variant="ghost" size="icon" onClick={handleSuggestCollections} disabled={isSuggestingTags}>
+                {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                <span className="sr-only">Sugerir Colecciones (IA)</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Sugerir Etiquetas</p>
-            </TooltipContent>
+            <TooltipContent><p>Sugerir Colecciones (IA)</p></TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -220,9 +232,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
                 <span className="sr-only">Regenerar Imagen</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              <p>Regenerar Imagen</p>
-            </TooltipContent>
+            <TooltipContent><p>Regenerar Imagen</p></TooltipContent>
           </Tooltip>
         </CardFooter>
       </Card>
