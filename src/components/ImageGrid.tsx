@@ -12,14 +12,7 @@ interface ImageGridProps {
   onDeleteImage: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => void;
   onCollectionsUpdated: (id: string, newCollections: string[]) => void;
-  onImageRegenerated: (
-    id: string, 
-    newImageData: Blob, 
-    newCollections: string[], 
-    newModelUsed: string,
-    prompt: string,
-    artisticStyle?: string
-  ) => void;
+  onImageGenerated: (image: GeneratedImage) => void; // Changed from onImageRegenerated
   isLoading?: boolean;
 }
 
@@ -29,7 +22,7 @@ export function ImageGrid({
   onDeleteImage, 
   onUpdateTags, 
   onCollectionsUpdated, 
-  onImageRegenerated,
+  onImageGenerated, // Changed from onImageRegenerated
   isLoading 
 }: ImageGridProps) {
   if (isLoading) {
@@ -62,7 +55,7 @@ export function ImageGrid({
           onDelete={onDeleteImage}
           onUpdateTags={onUpdateTags}
           onCollectionsUpdated={onCollectionsUpdated}
-          onImageRegenerated={onImageRegenerated}
+          onImageGenerated={onImageGenerated} // Changed from onImageRegenerated
         />
       ))}
     </div>

@@ -48,8 +48,9 @@ export default function HomePage() {
     try {
       await addGeneratedImage(newImage);
       loadImages(); 
+      toast({ title: "Imagen Guardada", description: "La nueva imagen se ha guardado en el historial." });
     } catch (error) {
-      toast({ title: "Error", description: "No se pudo guardar la imagen.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo guardar la nueva imagen.", variant: "destructive" });
     }
   };
 
@@ -98,47 +99,7 @@ export default function HomePage() {
     console.log(`[HomePage] Images state updated for imageId: ${id}. Current images state:`, images);
   };
 
-  const handleImageRegenerated = async (
-    id: string, 
-    newImageData: Blob, 
-    newCollections: string[], 
-    newModelUsed: string,
-    prompt: string,
-    artisticStyle?: string
-  ) => {
-    try {
-      // Update directly in Dexie since we have the Blob and other fields
-      await db.generatedImages.update(id, {
-        imageData: newImageData,
-        collections: newCollections,
-        modelUsed: newModelUsed,
-        prompt: prompt, // Ensure prompt and artisticStyle are also updated if they could change
-        artisticStyle: artisticStyle || 'none',
-        updatedAt: new Date(),
-      });
-
-      // Update local state
-      setImages(prevImages =>
-        prevImages.map(img =>
-          img.id === id
-            ? { 
-                ...img, 
-                imageData: newImageData, 
-                collections: newCollections, 
-                modelUsed: newModelUsed,
-                prompt: prompt,
-                artisticStyle: artisticStyle || 'none',
-                updatedAt: new Date(),
-              }
-            : img
-        )
-      );
-      toast({ title: "Imagen Actualizada", description: "La imagen se ha regenerado y actualizado en el historial." });
-    } catch (error) {
-      console.error("Error updating regenerated image in DB or state:", error);
-      toast({ title: "Error al Actualizar", description: "No se pudo actualizar la imagen regenerada.", variant: "destructive" });
-    }
-  };
+  // Removed handleImageRegenerated as ImageCard now calls handleImageGenerated for new images.
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
@@ -178,7 +139,7 @@ export default function HomePage() {
               onDeleteImage={handleDeleteImage}
               onUpdateTags={handleUpdateTags}
               onCollectionsUpdated={handleCollectionsUpdated}
-              onImageRegenerated={handleImageRegenerated}
+              onImageGenerated={handleImageGenerated} // Pass handleImageGenerated for new images from regeneration
               isLoading={isLoading}
             />
           </div>

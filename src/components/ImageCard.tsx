@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { suggestTagsAction, regenerateExistingImageAction } from '@/actions/imageActions';
+import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; // Changed import
 import { updateGeneratedImage, db } from '@/lib/db';
+import { v4 as uuidv4 } from 'uuid';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,15 +44,28 @@ interface ImageCardProps {
   onDelete: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => void;
   onCollectionsUpdated: (id: string, newCollections: string[]) => void;
-  onImageRegenerated: (
-    id: string, 
-    newImageData: Blob, 
-    newCollections: string[], 
-    newModelUsed: string,
-    prompt: string,
-    artisticStyle?: string
-  ) => void;
+  onImageGenerated: (image: GeneratedImage) => void; // Changed from onImageRegenerated
 }
+
+// Need to make artisticStyles accessible for display if not imported from elsewhere
+const artisticStylesList = [
+  { value: 'none', label: 'Ninguno (Por defecto)' },
+  { value: 'Photorealistic', label: 'Fotorrealista' },
+  { value: 'Cartoon', label: 'Dibujo Animado' },
+  { value: 'Watercolor', label: 'Acuarela' },
+  { value: 'Oil Painting', label: 'Pintura al Óleo' },
+  { value: 'Pixel Art', label: 'Pixel Art' },
+  { value: 'Anime', label: 'Anime' },
+  { value: 'Cyberpunk', label: 'Cyberpunk' },
+  { value: 'Fantasy Art', label: 'Arte Fantástico' },
+  { value: 'Abstract', label: 'Abstracto' },
+  { value: 'Impressionistic', label: 'Impresionista'},
+  { value: 'Steampunk', label: 'Steampunk' },
+  { value: 'Vintage Photography', label: 'Fotografía Vintage'},
+  { value: 'Line Art', label: 'Arte Lineal'},
+  { value: '3D Render', label: 'Render 3D'},
+];
+
 
 export function ImageCard({ 
   image, 
@@ -59,7 +73,7 @@ export function ImageCard({
   onDelete, 
   onUpdateTags, 
   onCollectionsUpdated,
-  onImageRegenerated
+  onImageGenerated // Changed from onImageRegenerated
 }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -113,7 +127,6 @@ export function ImageCard({
 
       if (result.success && result.suggestedCollections) {
         await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
-        console.log(`[ImageCard] Successfully updated DB (via client) for imageId: ${image.id} with collections:`, result.suggestedCollections);
         onCollectionsUpdated(image.id, result.suggestedCollections);
         
         if (result.suggestedCollections.length > 0) {
@@ -144,39 +157,44 @@ export function ImageCard({
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
-    toast({ title: "Regenerando Imagen...", description: "Por favor espera." });
+    toast({ title: "Generando nueva imagen...", description: "Usando el prompt y estilo actual. Por favor espera." });
     try {
-      const result = await regenerateExistingImageAction({
-        originalImageId: image.id,
+      const result = await generateImageAction({
         prompt: image.prompt,
         artisticStyle: image.artisticStyle || 'none',
       });
 
       if (result.error) {
-        toast({ title: "Error de Regeneración", description: result.error, variant: "destructive" });
+        toast({ title: "Error de Generación", description: result.error, variant: "destructive" });
         return;
       }
 
-      if (result.success && result.imageDataUri) {
+      if (result.success && result.imageDataUri && result.id) {
         const fetchRes = await fetch(result.imageDataUri);
-        if (!fetchRes.ok) throw new Error("Failed to fetch regenerated image data URI");
+        if (!fetchRes.ok) throw new Error("Falló al obtener el Data URI de la nueva imagen.");
         const newImageBlob = await fetchRes.blob();
         
-        onImageRegenerated(
-          result.originalImageId, 
-          newImageBlob, 
-          result.collections || [], 
-          result.modelUsed || 'Desconocido',
-          result.prompt, // pass original prompt back for potential DB update
-          result.artisticStyle // pass original artisticStyle back for potential DB update
-        );
-        toast({ title: "Imagen Regenerada", description: "La imagen ha sido actualizada." });
+        const newImageEntry: GeneratedImage = {
+          id: result.id, // New ID from server
+          imageData: newImageBlob,
+          prompt: result.prompt, // Original prompt
+          artisticStyle: result.artisticStyle || 'none', // Original style
+          tags: [], // New image starts with empty manual tags
+          collections: result.collections || [], // New AI collections
+          modelUsed: result.modelUsed || 'Desconocido',
+          isFavorite: false, // New image is not favorite by default
+          createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
+          updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
+        };
+        
+        onImageGenerated(newImageEntry); // Use the prop for adding a new image
+        toast({ title: "Nueva Imagen Generada", description: "La nueva imagen ha sido añadida al historial." });
       } else {
-        throw new Error("Regeneration failed or did not return image data.");
+        throw new Error("La generación falló o no devolvió los datos necesarios.");
       }
     } catch (error) {
-      console.error("Error regenerating image:", error);
-      toast({ title: "Error", description: error instanceof Error ? error.message : "Ocurrió un problema al regenerar la imagen.", variant: "destructive" });
+      console.error("Error regenerating as new image:", error);
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Ocurrió un problema al generar la nueva imagen.", variant: "destructive" });
     } finally {
       setIsRegenerating(false);
     }
@@ -244,7 +262,7 @@ export function ImageCard({
               )}
             </div>
             <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
-             {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {artisticStyles.find(s => s.value === image.artisticStyle)?.label || image.artisticStyle}</p>}
+             {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {artisticStylesList.find(s => s.value === image.artisticStyle)?.label || image.artisticStyle}</p>}
             <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
           </div>
           <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
@@ -320,10 +338,10 @@ export function ImageCard({
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={handleRegenerate} disabled={isRegenerating}>
                   {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  <span className="sr-only">Regenerar Imagen</span>
+                  <span className="sr-only">Regenerar como Nueva Imagen</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent><p>Regenerar Imagen</p></TooltipContent>
+              <TooltipContent><p>Regenerar como Nueva Imagen</p></TooltipContent>
             </Tooltip>
           </CardFooter>
         </Card>
@@ -346,22 +364,3 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
-
-// Need to make artisticStyles accessible for display
-const artisticStyles = [
-  { value: 'none', label: 'Ninguno (Por defecto)' },
-  { value: 'Photorealistic', label: 'Fotorrealista' },
-  { value: 'Cartoon', label: 'Dibujo Animado' },
-  { value: 'Watercolor', label: 'Acuarela' },
-  { value: 'Oil Painting', label: 'Pintura al Óleo' },
-  { value: 'Pixel Art', label: 'Pixel Art' },
-  { value: 'Anime', label: 'Anime' },
-  { value: 'Cyberpunk', label: 'Cyberpunk' },
-  { value: 'Fantasy Art', label: 'Arte Fantástico' },
-  { value: 'Abstract', label: 'Abstracto' },
-  { value: 'Impressionistic', label: 'Impresionista'},
-  { value: 'Steampunk', label: 'Steampunk' },
-  { value: 'Vintage Photography', label: 'Fotografía Vintage'},
-  { value: 'Line Art', label: 'Arte Lineal'},
-  { value: '3D Render', label: 'Render 3D'},
-];
