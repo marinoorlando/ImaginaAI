@@ -7,11 +7,14 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(1).stores({
-      generatedImages: 'id, prompt, &tags, modelUsed, isFavorite, createdAt, updatedAt',
-      // '&tags' creates a multiEntry index for the tags array
-      // 'isFavorite' can be indexed for faster filtering of favorites
+    this.version(2).stores({ // Incremented version to 2
+      generatedImages: 'id, prompt, *tags, modelUsed, isFavorite, createdAt, updatedAt',
+      // Changed &tags to *tags to allow non-unique tags.
+      // '&tags' creates a unique multiEntry index.
+      // '*tags' creates a non-unique multiEntry index.
     });
+    // The previous version 1 schema definition is implicitly handled by Dexie's upgrade process.
+    // If version 1 existed with '&tags', Dexie will attempt to migrate to version 2 with '*tags'.
   }
 }
 
