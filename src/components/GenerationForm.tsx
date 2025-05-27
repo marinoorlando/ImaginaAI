@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
-  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }), // This validates manual tags
+  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -30,7 +30,7 @@ interface GenerationFormProps {
 
 export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const { toast } = useToast();
-  const [currentTags, setCurrentTags] = useState<string[]>([]); // For manual tags
+  const [currentTags, setCurrentTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -45,7 +45,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const promptValue = watch('prompt');
 
   useEffect(() => {
-    // Update RHF's 'tags' field when currentTags (manual tags) changes
     setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 });
   }, [currentTags, setValue]);
 
@@ -66,6 +65,10 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
 
   const removeTag = (tagToRemove: string) => {
     setCurrentTags(currentTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const clearPrompt = () => {
+    setValue('prompt', '', { shouldValidate: true });
   };
   
   async function onSubmit(data: FormData) {
@@ -93,8 +96,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
-          tags: currentTags, // Manual tags
-          collections: result.collections || [], // AI-suggested collections, initialized empty
+          tags: currentTags, 
+          collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
@@ -135,18 +138,32 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="prompt">Prompt</Label>
-            <Controller
-              name="prompt"
-              control={control}
-              render={({ field }) => (
-                <Textarea
-                  id="prompt"
-                  placeholder="Describe la imagen que quieres generar..."
-                  className="min-h-[100px] resize-none"
-                  {...field}
-                />
+            <div className="relative">
+              <Controller
+                name="prompt"
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    id="prompt"
+                    placeholder="Describe la imagen que quieres generar..."
+                    className="min-h-[100px] resize-none pr-10" // Add padding for the button
+                    {...field}
+                  />
+                )}
+              />
+              {promptValue && promptValue.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1 h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={clearPrompt}
+                  aria-label="Limpiar prompt"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               )}
-            />
+            </div>
             {errors.prompt && <p className="text-sm text-destructive">{errors.prompt.message}</p>}
             <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 500</p>
           </div>
@@ -155,7 +172,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
             <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
-                {/* This hidden input is managed by RHF through setValue in useEffect */}
                 <input type="hidden" {...register("tags")} /> 
                 <Input
                     id="tags-input"
