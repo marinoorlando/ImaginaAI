@@ -5,8 +5,7 @@ import { suggestTags as suggestTagsFlow, type SuggestTagsInput } from "@/ai/flow
 import { generateImage as generateImageWithGenkitFlow, type GenerateImageInput as GenkitImageInput } from "@/ai/flows/generate-image-flow";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
-// Removed: import { updateGeneratedImage } from "@/lib/db"; 
-// updateGeneratedImage will be called from the client side after this action returns.
+import { updateGeneratedImage } from "@/lib/db"; 
 
 const GenerateImageServerInputSchema = z.object({
   prompt: z.string().min(1, "El prompt es requerido."),
@@ -20,13 +19,13 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
 
-  const { prompt } = validation.data;
+  const { prompt, artisticStyle } = validation.data;
   let suggestedCollections: string[] = [];
 
   try {
     // 1. Generate the image
-    console.log("[generateImageAction] Calling generateImageWithGenkitFlow with prompt:", prompt);
-    const genkitResult = await generateImageWithGenkitFlow({ prompt });
+    console.log("[generateImageAction] Calling generateImageWithGenkitFlow with prompt:", prompt, "and style:", artisticStyle);
+    const genkitResult = await generateImageWithGenkitFlow({ prompt, artisticStyle });
     console.log("[generateImageAction] Result from generateImageWithGenkitFlow:", genkitResult);
 
     // 2. Suggest collections (tags) for the generated image automatically
@@ -67,7 +66,6 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
 
 
 const SuggestTagsServerInputSchema = z.object({
-  // imageId is no longer needed here as DB update happens on client
   prompt: z.string().min(1, "El prompt es requerido para sugerir etiquetas."),
 });
 
@@ -78,7 +76,7 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     return { error: "Entrada inválida.", details: validation.error.flatten(), suggestedCollections: [] };
   }
   
-  const { prompt: imagePrompt } = validation.data; // imageId removed
+  const { prompt: imagePrompt } = validation.data;
   console.log("[suggestTagsAction] Received values for AI suggestion:", values);
 
   try {
@@ -91,13 +89,13 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
 
     console.log(`[suggestTagsAction] Collections suggested by AI:`, collectionsToSuggest);
     
-    // The database update will now happen on the client side.
-    // This Server Action's only job is to get the suggestions.
     return { success: true, suggestedCollections: collectionsToSuggest };
 
-  } catch (error) { // Catch errors from suggestTagsFlow (AI suggestion part)
+  } catch (error) { 
     console.error("[suggestTagsAction] Error in suggestTagsFlow execution:", error);
     const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones con IA.";
     return { error: errorMessage, suggestedCollections: [] };
   }
 }
+
+    

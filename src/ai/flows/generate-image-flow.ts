@@ -13,6 +13,7 @@ import {z} from 'genkit';
 
 const GenerateImageInputSchema = z.object({
   prompt: z.string().describe('The text prompt to generate an image from.'),
+  artisticStyle: z.string().optional().describe('The artistic style to apply to the image. E.g., "Cartoon", "Photorealistic". Default is none.'),
 });
 export type GenerateImageInput = z.infer<typeof GenerateImageInputSchema>;
 
@@ -39,16 +40,39 @@ const generateImageFlow = ai.defineFlow(
     outputSchema: GenerateImageOutputSchema,
   },
   async (input) => {
+    let finalPrompt = input.prompt;
+    if (input.artisticStyle && input.artisticStyle.toLowerCase() !== 'none' && input.artisticStyle.trim() !== '') {
+      finalPrompt = `${input.prompt}, in the artistic style of ${input.artisticStyle}`;
+    }
+
     const { media } = await ai.generate({
       model: 'googleai/gemini-2.0-flash-exp', // IMPORTANT: Must be this model for images
-      prompt: input.prompt,
+      prompt: finalPrompt,
       config: {
         responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE
+         safetySettings: [ // Added safety settings to be less restrictive for creative content
+          {
+            category: 'HARM_CATEGORY_HATE_SPEECH',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          },
+          {
+            category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          },
+          {
+            category: 'HARM_CATEGORY_HARASSMENT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          },
+          {
+            category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            threshold: 'BLOCK_MEDIUM_AND_ABOVE', 
+          },
+        ],
       },
     });
 
     if (!media || !media.url) {
-      throw new Error('Image generation failed or did not return a media URL.');
+      throw new Error('Image generation failed or did not return a media URL. This might be due to safety filters or an issue with the model.');
     }
 
     return {
@@ -57,3 +81,5 @@ const generateImageFlow = ai.defineFlow(
     };
   }
 );
+
+    

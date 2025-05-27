@@ -16,10 +16,18 @@ import { generateImageAction } from '@/actions/imageActions';
 import type { GeneratedImage } from '@/lib/types';
 import { Sparkles, Tag, Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
   tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
+  artisticStyle: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -30,6 +38,24 @@ interface GenerationFormProps {
 
 const MAX_RECENT_TAGS = 15;
 const RECENT_TAGS_STORAGE_KEY = 'imaginaAiRecentTags';
+
+const artisticStyles = [
+  { value: 'none', label: 'Ninguno (Por defecto)' },
+  { value: 'Photorealistic', label: 'Fotorrealista' },
+  { value: 'Cartoon', label: 'Dibujo Animado' },
+  { value: 'Watercolor', label: 'Acuarela' },
+  { value: 'Oil Painting', label: 'Pintura al Óleo' },
+  { value: 'Pixel Art', label: 'Pixel Art' },
+  { value: 'Anime', label: 'Anime' },
+  { value: 'Cyberpunk', label: 'Cyberpunk' },
+  { value: 'Fantasy Art', label: 'Arte Fantástico' },
+  { value: 'Abstract', label: 'Abstracto' },
+  { value: 'Impressionistic', label: 'Impresionista'},
+  { value: 'Steampunk', label: 'Steampunk' },
+  { value: 'Vintage Photography', label: 'Fotografía Vintage'},
+  { value: 'Line Art', label: 'Arte Lineal'},
+  { value: '3D Render', label: 'Render 3D'},
+];
 
 export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const { toast } = useToast();
@@ -43,12 +69,12 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     defaultValues: {
       prompt: '',
       tags: '',
+      artisticStyle: 'none',
     },
   });
 
   const promptValue = watch('prompt');
 
-  // Load recent tags from localStorage on mount
   useEffect(() => {
     const storedTags = localStorage.getItem(RECENT_TAGS_STORAGE_KEY);
     if (storedTags) {
@@ -59,7 +85,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         }
       } catch (e) {
         console.error("Failed to parse recent tags from localStorage", e);
-        setRecentTags([]); // Fallback to empty if parsing fails
+        setRecentTags([]);
       }
     }
   }, []);
@@ -75,9 +101,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   }, []);
 
   useEffect(() => {
-    // Sync currentTags with RHF's 'tags' field (comma-separated string)
-    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
-    // whenever currentTags changes, providing immediate feedback.
     setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 || formSchema.shape.tags.safeParse('').success === false });
   }, [currentTags, setValue]);
 
@@ -113,7 +136,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   async function onSubmit(data: FormData) {
     setIsGenerating(true);
     try {
-      const result = await generateImageAction({ prompt: data.prompt, artisticStyle: undefined });
+      const result = await generateImageAction({ prompt: data.prompt, artisticStyle: data.artisticStyle });
 
       if (result.error) {
         toast({
@@ -211,6 +234,29 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="artisticStyle">Estilo Artístico</Label>
+            <Controller
+              name="artisticStyle"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <SelectTrigger id="artisticStyle">
+                    <SelectValue placeholder="Selecciona un estilo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {artisticStyles.map(style => (
+                      <SelectItem key={style.value} value={style.value}>
+                        {style.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.artisticStyle && <p className="text-sm text-destructive">{errors.artisticStyle.message}</p>}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
@@ -280,3 +326,5 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     </Card>
   );
 }
+
+    
