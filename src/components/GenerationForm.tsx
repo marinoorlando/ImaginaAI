@@ -8,14 +8,14 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input';
-import { Label } from "@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from "@/hooks/use-toast";
 import { generateImageAction } from '@/actions/imageActions';
 import type { GeneratedImage } from '@/lib/types';
-import { Sparkles, Tag, Loader2 } from 'lucide-react';
-import { Badge } from './ui/badge';
+import { Sparkles, Tag, Loader2, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
@@ -63,12 +63,23 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   };
   
   async function onSubmit(data: FormData) {
-    if (currentTags.length === 0) {
-      toast({
-        title: "Error de validación",
-        description: "Por favor, añade al menos una etiqueta.",
-        variant: "destructive",
-      });
+    // Update RHF's 'tags' field value right before submission / validation
+    // This ensures the zod schema validates against the actual currentTags
+    control.setValue('tags', currentTags.join(','), { shouldValidate: true });
+    
+    // Trigger validation manually to check currentTags through RHF's 'tags' field
+    const isValid = await control.trigger();
+    if (!isValid || currentTags.length === 0) {
+        // If RHF validation for tags fails (e.g. empty string after join)
+        // or if currentTags array is empty (double check)
+        if (currentTags.length === 0 && !errors.tags) {
+             toast({
+                title: "Error de validación",
+                description: "Por favor, añade al menos una etiqueta.",
+                variant: "destructive",
+            });
+        }
+        // If RHF has an error for tags, it will be displayed by the FormMessage component
       return;
     }
 
@@ -112,6 +123,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         });
         reset();
         setCurrentTags([]);
+        control.setValue('tags', ''); // Clear RHF tags field
       }
     } catch (error) {
       console.error("Generation error:", error);
@@ -154,9 +166,11 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="tags">Etiquetas (separadas por coma o Enter)</Label>
+            <Label htmlFor="tags-input">Etiquetas (separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
+                {/* Hidden input for RHF to manage the "tags" field based on currentTags */}
+                <input type="hidden" {...register("tags", { setValueAs: () => currentTags.join(',') })} />
                 <Input
                     id="tags-input"
                     type="text"
@@ -164,15 +178,16 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
                     value={tagInput}
                     onChange={handleTagInputChange}
                     onKeyDown={handleTagInputKeyDown}
-                    {...register("tags", {setValueAs: () => currentTags.join(',')})} // RHF needs a registered field
+                    aria-describedby="tags-error"
                 />
             </div>
-            {currentTags.length === 0 && errors.tags && <p className="text-sm text-destructive">{errors.tags.message}</p>}
+            {/* Display RHF error for the 'tags' field */}
+            {errors.tags && <p id="tags-error" className="text-sm text-destructive">{errors.tags.message}</p>}
             <div className="flex flex-wrap gap-2 mt-2">
               {currentTags.map(tag => (
                 <Badge key={tag} variant="secondary" className="flex items-center">
                   {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-muted-foreground hover:text-foreground">
+                  <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
