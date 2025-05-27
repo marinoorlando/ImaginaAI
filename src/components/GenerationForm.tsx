@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { generateImageAction } from '@/actions/imageActions';
 import type { GeneratedImage } from '@/lib/types';
@@ -34,7 +34,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const [tagInput, setTagInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const { control, handleSubmit, register, reset, formState: { errors } } = useForm<FormData>({
+  const { control, handleSubmit, register, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: '',
@@ -42,13 +42,16 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     },
   });
 
+  const promptValue = watch('prompt');
+
+
   // Effect to synchronize currentTags (React state) with RHF's 'tags' field
   useEffect(() => {
     // `setValue` updates RHF's internal state for the 'tags' field.
     // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
     // whenever currentTags changes, providing immediate feedback.
-    control.setValue('tags', currentTags.join(','), { shouldValidate: true });
-  }, [currentTags, control]);
+    setValue('tags', currentTags.join(','), { shouldValidate: true });
+  }, [currentTags, setValue]);
 
   const handleTagInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setTagInput(event.target.value);
@@ -152,7 +155,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
               )}
             />
             {errors.prompt && <p className="text-sm text-destructive">{errors.prompt.message}</p>}
-            <p className="text-xs text-muted-foreground text-right">{control._getWatch('prompt')?.length || 0} / 500</p>
+            <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 500</p>
           </div>
 
           <div className="space-y-2">
