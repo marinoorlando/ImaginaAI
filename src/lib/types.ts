@@ -12,7 +12,9 @@ export interface GeneratedImage {
   width?: number;
   height?: number;
   originalUrl?: string; // If fetched from a URL before converting to Blob
-  artisticStyle?: string; // Added for regeneration
+  artisticStyle?: string;
+  aspectRatio?: string; // e.g., "1:1", "16:9"
+  imageQuality?: string; // e.g., "draft", "standard", "high"
 }
 
 // For future use with simulated login

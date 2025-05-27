@@ -5,11 +5,12 @@ import { suggestTags as suggestTagsFlow, type SuggestTagsInput } from "@/ai/flow
 import { generateImage as generateImageWithGenkitFlow, type GenerateImageInput as GenkitImageInput } from "@/ai/flows/generate-image-flow";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
-// No direct DB updates from server actions for IndexedDB for image data
 
 const GenerateImageServerInputSchema = z.object({
   prompt: z.string().min(1, "El prompt es requerido."),
   artisticStyle: z.string().optional(),
+  aspectRatio: z.string().optional(),
+  imageQuality: z.string().optional(),
 });
 
 export async function generateImageAction(values: z.infer<typeof GenerateImageServerInputSchema>) {
@@ -19,12 +20,17 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
 
-  const { prompt, artisticStyle } = validation.data;
+  const { prompt, artisticStyle, aspectRatio, imageQuality } = validation.data;
   let suggestedCollections: string[] = [];
 
   try {
-    console.log("[generateImageAction] Calling generateImageWithGenkitFlow with prompt:", prompt, "and style:", artisticStyle);
-    const genkitResult = await generateImageWithGenkitFlow({ prompt, artisticStyle });
+    console.log("[generateImageAction] Calling generateImageWithGenkitFlow with prompt:", prompt, "style:", artisticStyle, "aspectRatio:", aspectRatio, "imageQuality:", imageQuality);
+    const genkitResult = await generateImageWithGenkitFlow({ 
+      prompt, 
+      artisticStyle,
+      aspectRatio,
+      imageQuality 
+    });
     console.log("[generateImageAction] Result from generateImageWithGenkitFlow:", genkitResult);
 
     try {
@@ -46,7 +52,9 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
       imageDataUri: genkitResult.imageDataUri,
       id: uuidv4(),
       prompt: prompt,
-      artisticStyle: artisticStyle || 'none', // Ensure artisticStyle is returned
+      artisticStyle: artisticStyle || 'none',
+      aspectRatio: aspectRatio || '1:1',
+      imageQuality: imageQuality || 'standard',
       collections: suggestedCollections,
       modelUsed: genkitResult.modelUsed,
       createdAt: new Date().toISOString(),
@@ -94,5 +102,3 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     return { error: errorMessage, suggestedCollections: [] };
   }
 }
-// Removed regenerateExistingImageAction as it's replaced by using generateImageAction
-// for creating a new image from an existing one's parameters.

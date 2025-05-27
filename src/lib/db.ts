@@ -7,9 +7,9 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(4).stores({ // Incremented version to 4
-      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle',
-      // Added artisticStyle
+    this.version(5).stores({ // Incremented version to 5
+      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality',
+      // Added artisticStyle, aspectRatio, imageQuality
     });
   }
 }
@@ -25,6 +25,8 @@ export async function addGeneratedImage(image: GeneratedImage): Promise<string> 
       tags: image.tags || [],
       collections: image.collections || [],
       artisticStyle: image.artisticStyle || 'none',
+      aspectRatio: image.aspectRatio || '1:1',
+      imageQuality: image.imageQuality || 'standard',
       createdAt: image.createdAt || new Date(),
       updatedAt: image.updatedAt || new Date(),
     };

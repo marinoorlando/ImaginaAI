@@ -10,7 +10,7 @@ import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
-import { updateGeneratedImage, db } from '@/lib/db';
+import { updateGeneratedImage } from '@/lib/db'; // Removed db import as it is not directly used
 import { v4 as uuidv4 } from 'uuid';
 import {
   AlertDialog,
@@ -47,7 +47,6 @@ interface ImageCardProps {
   onImageGenerated: (image: GeneratedImage) => void; 
 }
 
-// Need to make artisticStyles accessible for display if not imported from elsewhere
 const artisticStylesList = [
   { value: 'none', label: 'Ninguno (Por defecto)' },
   { value: 'Photorealistic', label: 'Fotorrealista' },
@@ -64,6 +63,21 @@ const artisticStylesList = [
   { value: 'Vintage Photography', label: 'Fotografía Vintage'},
   { value: 'Line Art', label: 'Arte Lineal'},
   { value: '3D Render', label: 'Render 3D'},
+];
+
+const aspectRatiosList = [
+  { value: '1:1', label: 'Cuadrado (1:1)' },
+  { value: '16:9', label: 'Horizontal (16:9)' },
+  { value: '9:16', label: 'Vertical (9:16)' },
+  { value: '4:3', label: 'Paisaje (4:3)' },
+  { value: '3:4', label: 'Retrato (3:4)' },
+];
+
+const imageQualitiesList = [
+  { value: 'draft', label: 'Borrador' },
+  { value: 'standard', label: 'Estándar' },
+  { value: 'high', label: 'Alta' },
+  // { value: 'ultra', label: 'Ultra Alta' },
 ];
 
 
@@ -90,7 +104,7 @@ export function ImageCard({
     } else {
       console.warn(`Image data for ${image.id} is not a Blob:`, image.imageData);
       setIsLoadingImageUrl(false);
-      setImageUrl(null); // Ensure no old URL is shown
+      setImageUrl(null); 
     }
   }, [image.imageData, image.id]);
 
@@ -131,8 +145,9 @@ export function ImageCard({
       }
 
       if (result.success && result.suggestedCollections) {
+        // Update DB from client-side
         await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
-        onCollectionsUpdated(image.id, result.suggestedCollections);
+        onCollectionsUpdated(image.id, result.suggestedCollections); // Update local state for immediate UI feedback
         
         if (result.suggestedCollections.length > 0) {
             toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
@@ -140,7 +155,6 @@ export function ImageCard({
             toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado." });
         }
       } else {
-        // This case should ideally be caught by result.error, but as a fallback:
         console.error(`[ImageCard] Unexpected: No error but no suggested collections from suggestTagsAction for imageId ${image.id}:`, result);
         toast({ 
             title: "Error al Sugerir Colecciones", 
@@ -168,6 +182,8 @@ export function ImageCard({
       const result = await generateImageAction({
         prompt: image.prompt,
         artisticStyle: image.artisticStyle || 'none',
+        aspectRatio: image.aspectRatio || '1:1',
+        imageQuality: image.imageQuality || 'standard',
       });
 
       if (result.error) {
@@ -185,6 +201,8 @@ export function ImageCard({
           imageData: newImageBlob,
           prompt: result.prompt, 
           artisticStyle: result.artisticStyle || 'none', 
+          aspectRatio: result.aspectRatio || '1:1',
+          imageQuality: result.imageQuality || 'standard',
           tags: [], 
           collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
@@ -206,6 +224,10 @@ export function ImageCard({
     }
   };
   
+  const getLabel = (list: {value: string, label: string}[], value?: string) => {
+    return list.find(item => item.value === value)?.label || value || 'N/A';
+  }
+
   return (
     <TooltipProvider>
       <Dialog>
@@ -225,7 +247,7 @@ export function ImageCard({
                     src={imageUrl}
                     alt={image.prompt}
                     fill={true}
-                    style={{objectFit: "contain"}} // Changed from "cover" to "contain"
+                    style={{objectFit: "contain"}} 
                     data-ai-hint="abstract art"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
@@ -268,7 +290,9 @@ export function ImageCard({
               )}
             </div>
             <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
-             {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {artisticStylesList.find(s => s.value === image.artisticStyle)?.label || image.artisticStyle}</p>}
+            {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {getLabel(artisticStylesList, image.artisticStyle)}</p>}
+            {image.aspectRatio && <p className="text-xs text-muted-foreground">Aspecto: {getLabel(aspectRatiosList, image.aspectRatio)}</p>}
+            {image.imageQuality && <p className="text-xs text-muted-foreground">Calidad: {getLabel(imageQualitiesList, image.imageQuality)}</p>}
             <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
           </div>
           <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
@@ -370,4 +394,3 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
-

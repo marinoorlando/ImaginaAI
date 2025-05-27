@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { useToast } from "@/hooks/use-toast";
 import { generateImageAction } from '@/actions/imageActions';
 import type { GeneratedImage } from '@/lib/types';
-import { Sparkles, Tag, Loader2, X } from 'lucide-react';
+import { Sparkles, Tag, Loader2, X, HelpCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -22,12 +22,23 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
   tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
   artisticStyle: z.string().optional(),
+  aspectRatio: z.string().optional(),
+  imageQuality: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -57,6 +68,22 @@ const artisticStyles = [
   { value: '3D Render', label: 'Render 3D'},
 ];
 
+const aspectRatios = [
+  { value: '1:1', label: 'Cuadrado (1:1)' },
+  { value: '16:9', label: 'Horizontal (16:9)' },
+  { value: '9:16', label: 'Vertical (9:16)' },
+  { value: '4:3', label: 'Paisaje (4:3)' },
+  { value: '3:4', label: 'Retrato (3:4)' },
+];
+
+const imageQualities = [
+  { value: 'draft', label: 'Borrador', description: 'Generación rápida, ideal para pruebas e iteraciones veloces. Menor detalle.' },
+  { value: 'standard', label: 'Estándar', description: 'Equilibrio entre velocidad y detalle. Recomendado para uso general.' },
+  { value: 'high', label: 'Alta', description: 'Mayor detalle y fidelidad visual. Puede tardar más en generar.' },
+  // { value: 'ultra', label: 'Ultra Alta', description: 'Máximo detalle posible. Tiempos de generación significativamente más largos.' },
+];
+
+
 export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const { toast } = useToast();
   const [currentTags, setCurrentTags] = useState<string[]>([]);
@@ -70,6 +97,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
       prompt: '',
       tags: '',
       artisticStyle: 'none',
+      aspectRatio: '1:1',
+      imageQuality: 'standard',
     },
   });
 
@@ -136,7 +165,12 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   async function onSubmit(data: FormData) {
     setIsGenerating(true);
     try {
-      const result = await generateImageAction({ prompt: data.prompt, artisticStyle: data.artisticStyle });
+      const result = await generateImageAction({ 
+        prompt: data.prompt, 
+        artisticStyle: data.artisticStyle,
+        aspectRatio: data.aspectRatio,
+        imageQuality: data.imageQuality,
+      });
 
       if (result.error) {
         toast({
@@ -158,7 +192,9 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
-          artisticStyle: result.artisticStyle || data.artisticStyle || 'none', // Save artistic style
+          artisticStyle: result.artisticStyle || data.artisticStyle || 'none',
+          aspectRatio: result.aspectRatio || data.aspectRatio || '1:1',
+          imageQuality: result.imageQuality || data.imageQuality || 'standard',
           tags: currentTags, 
           collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
@@ -193,137 +229,206 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   }
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Sparkles className="h-6 w-6 mr-2 text-primary" />
-          Crear Nueva Imagen
-        </CardTitle>
-      </CardHeader>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="prompt">Prompt</Label>
-            <div className="relative">
+    <TooltipProvider>
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Sparkles className="h-6 w-6 mr-2 text-primary" />
+            Crear Nueva Imagen
+          </CardTitle>
+        </CardHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="prompt">Prompt</Label>
+              <div className="relative">
+                <Controller
+                  name="prompt"
+                  control={control}
+                  render={({ field }) => (
+                    <Textarea
+                      id="prompt"
+                      placeholder="Describe la imagen que quieres generar..."
+                      className="min-h-[100px] resize-none pr-10"
+                      {...field}
+                    />
+                  )}
+                />
+                {promptValue && promptValue.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1 h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={clearPrompt}
+                    aria-label="Limpiar prompt"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {errors.prompt && <p className="text-sm text-destructive">{errors.prompt.message}</p>}
+              <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 500</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="artisticStyle">Estilo Artístico</Label>
+                <Controller
+                  name="artisticStyle"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <SelectTrigger id="artisticStyle">
+                        <SelectValue placeholder="Selecciona un estilo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {artisticStyles.map(style => (
+                          <SelectItem key={style.value} value={style.value}>
+                            {style.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.artisticStyle && <p className="text-sm text-destructive">{errors.artisticStyle.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="aspectRatio">Relación de Aspecto</Label>
+                <Controller
+                  name="aspectRatio"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <SelectTrigger id="aspectRatio">
+                        <SelectValue placeholder="Selecciona relación" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aspectRatios.map(ratio => (
+                          <SelectItem key={ratio.value} value={ratio.value}>
+                            {ratio.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.aspectRatio && <p className="text-sm text-destructive">{errors.aspectRatio.message}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+               <div className="flex items-center space-x-2">
+                <Label htmlFor="imageQuality">Calidad de Imagen</Label>
+                <Tooltip>
+                  <TooltipTrigger type="button">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <p className="text-sm">
+                      <strong>Borrador:</strong> Generación rápida, ideal para pruebas. Menor detalle.
+                    </p>
+                    <p className="text-sm mt-1">
+                      <strong>Estándar:</strong> Equilibrio entre velocidad y detalle. Uso general.
+                    </p>
+                    <p className="text-sm mt-1">
+                      <strong>Alta:</strong> Mayor detalle. Puede tardar más.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Controller
-                name="prompt"
+                name="imageQuality"
                 control={control}
                 render={({ field }) => (
-                  <Textarea
-                    id="prompt"
-                    placeholder="Describe la imagen que quieres generar..."
-                    className="min-h-[100px] resize-none pr-10"
-                    {...field}
-                  />
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <SelectTrigger id="imageQuality">
+                      <SelectValue placeholder="Selecciona calidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {imageQualities.map(quality => (
+                        <SelectItem key={quality.value} value={quality.value} aria-label={quality.description}>
+                          {quality.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               />
-              {promptValue && promptValue.length > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1 h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={clearPrompt}
-                  aria-label="Limpiar prompt"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              {errors.imageQuality && <p className="text-sm text-destructive">{errors.imageQuality.message}</p>}
             </div>
-            {errors.prompt && <p className="text-sm text-destructive">{errors.prompt.message}</p>}
-            <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 500</p>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="artisticStyle">Estilo Artístico</Label>
-            <Controller
-              name="artisticStyle"
-              control={control}
-              render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <SelectTrigger id="artisticStyle">
-                    <SelectValue placeholder="Selecciona un estilo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {artisticStyles.map(style => (
-                      <SelectItem key={style.value} value={style.value}>
-                        {style.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {errors.artisticStyle && <p className="text-sm text-destructive">{errors.artisticStyle.message}</p>}
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
-             <div className="flex items-center space-x-2">
-                <Tag className="h-5 w-5 text-muted-foreground" />
-                <input type="hidden" {...register("tags")} /> 
-                <Input
-                    id="tags-input"
-                    type="text"
-                    placeholder="Añade etiquetas manuales..."
-                    value={tagInput}
-                    onChange={handleTagInputChange}
-                    onKeyDown={handleTagInputKeyDown}
-                    aria-describedby="tags-error"
-                />
-            </div>
-            {errors.tags && <p id="tags-error" className="text-sm text-destructive">{errors.tags.message}</p>}
-            <div className="flex flex-wrap gap-2 mt-2">
-              {currentTags.map(tag => (
-                <Badge key={tag} variant="secondary" className="flex items-center">
-                  {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {recentTags.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <Label>Etiquetas Recientes</Label>
-              <div className="flex flex-wrap gap-2">
-                {recentTags.map(tag => (
-                  <Badge
-                    key={`recent-${tag}`}
-                    variant="outline"
-                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                    onClick={() => addRecentTagToCurrent(tag)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') addRecentTagToCurrent(tag); }}
-                    aria-label={`Añadir etiqueta reciente: ${tag}`}
-                  >
+            <div className="space-y-2">
+              <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
+              <div className="flex items-center space-x-2">
+                  <Tag className="h-5 w-5 text-muted-foreground" />
+                  <input type="hidden" {...register("tags")} /> 
+                  <Input
+                      id="tags-input"
+                      type="text"
+                      placeholder="Añade etiquetas manuales..."
+                      value={tagInput}
+                      onChange={handleTagInputChange}
+                      onKeyDown={handleTagInputKeyDown}
+                      aria-describedby="tags-error"
+                  />
+              </div>
+              {errors.tags && <p id="tags-error" className="text-sm text-destructive">{errors.tags.message}</p>}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {currentTags.map(tag => (
+                  <Badge key={tag} variant="secondary" className="flex items-center">
                     {tag}
+                    <button type="button" onClick={() => removeTag(tag)} className="ml-1.5 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
+                      <X className="h-3 w-3" />
+                    </button>
                   </Badge>
                 ))}
               </div>
             </div>
-          )}
 
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" className="w-full" disabled={isGenerating}>
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generando...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Generar Imagen
-              </>
+            {recentTags.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <Label>Etiquetas Recientes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {recentTags.map(tag => (
+                    <Badge
+                      key={`recent-${tag}`}
+                      variant="outline"
+                      className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => addRecentTagToCurrent(tag)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') addRecentTagToCurrent(tag); }}
+                      aria-label={`Añadir etiqueta reciente: ${tag}`}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
             )}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" className="w-full" disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generar Imagen
+                </>
+              )}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+    </TooltipProvider>
   );
 }

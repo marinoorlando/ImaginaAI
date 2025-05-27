@@ -14,6 +14,8 @@ import {z} from 'genkit';
 const GenerateImageInputSchema = z.object({
   prompt: z.string().describe('The text prompt to generate an image from.'),
   artisticStyle: z.string().optional().describe('The artistic style to apply to the image. E.g., "Cartoon", "Photorealistic". Default is none.'),
+  aspectRatio: z.string().optional().describe('The desired aspect ratio. E.g., "1:1", "16:9". Model support may vary.'),
+  imageQuality: z.string().optional().describe('The desired image quality. E.g., "draft", "standard", "high". Model support may vary.'),
 });
 export type GenerateImageInput = z.infer<typeof GenerateImageInputSchema>;
 
@@ -41,33 +43,47 @@ const generateImageFlow = ai.defineFlow(
   },
   async (input) => {
     let finalPrompt = input.prompt;
-    // Ensure the artistic style is appended to the prompt if selected and valid
+    
     if (input.artisticStyle && input.artisticStyle.trim() !== '' && input.artisticStyle.toLowerCase() !== 'none') {
-      finalPrompt = `${input.prompt}, in the artistic style of ${input.artisticStyle}`;
+      finalPrompt = `${finalPrompt}, in the artistic style of ${input.artisticStyle}`;
     }
+
+    if (input.aspectRatio && input.aspectRatio.trim() !== '') {
+      finalPrompt = `${finalPrompt}, with an aspect ratio of ${input.aspectRatio}`;
+    }
+
+    if (input.imageQuality && input.imageQuality.trim() !== '') {
+      let qualityDescriptor = input.imageQuality;
+      if (input.imageQuality === 'draft') qualityDescriptor = 'draft quality, quick sketch';
+      if (input.imageQuality === 'standard') qualityDescriptor = 'standard quality';
+      if (input.imageQuality === 'high') qualityDescriptor = 'high quality, detailed';
+      // if (input.imageQuality === 'ultra') qualityDescriptor = 'ultra high quality, highly detailed'; // Potentially too demanding for current model
+      finalPrompt = `${finalPrompt}, ${qualityDescriptor}`;
+    }
+    
     console.log('[generateImageFlow] Final prompt sent to AI:', finalPrompt);
 
     const { media } = await ai.generate({
-      model: 'googleai/gemini-2.0-flash-exp', // IMPORTANT: Must be this model for images
+      model: 'googleai/gemini-2.0-flash-exp', 
       prompt: finalPrompt,
       config: {
-        responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE
+        responseModalities: ['TEXT', 'IMAGE'], 
          safetySettings: [
           {
             category: 'HARM_CATEGORY_HATE_SPEECH',
-            threshold: 'BLOCK_ONLY_HIGH', // Relaxed from BLOCK_MEDIUM_AND_ABOVE
+            threshold: 'BLOCK_ONLY_HIGH', 
           },
           {
             category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-            threshold: 'BLOCK_ONLY_HIGH', // Relaxed from BLOCK_MEDIUM_AND_ABOVE
+            threshold: 'BLOCK_ONLY_HIGH', 
           },
           {
             category: 'HARM_CATEGORY_HARASSMENT',
-            threshold: 'BLOCK_ONLY_HIGH', // Relaxed from BLOCK_MEDIUM_AND_ABOVE
+            threshold: 'BLOCK_ONLY_HIGH', 
           },
           {
             category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-            threshold: 'BLOCK_ONLY_HIGH', // Relaxed from BLOCK_MEDIUM_AND_ABOVE
+            threshold: 'BLOCK_ONLY_HIGH', 
           },
         ],
       },
@@ -83,4 +99,3 @@ const generateImageFlow = ai.defineFlow(
     };
   }
 );
-
