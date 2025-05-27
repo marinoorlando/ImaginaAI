@@ -75,16 +75,26 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
   };
 
   const handleSuggestCollections = async () => {
+    console.log(`[ImageCard] handleSuggestCollections called for imageId: ${image.id}, prompt: ${image.prompt}`);
     setIsSuggestingTags(true);
     try {
       const result = await suggestTagsAction({ imageId: image.id, prompt: image.prompt });
+      console.log(`[ImageCard] Result from suggestTagsAction for imageId ${image.id}:`, result);
+
       if (result.success && result.suggestedCollections) {
+        console.log(`[ImageCard] Calling onCollectionsUpdated for imageId ${image.id} with collections:`, result.suggestedCollections);
         onCollectionsUpdated(image.id, result.suggestedCollections); 
-        toast({ title: "Colecciones Sugeridas", description: "Se añadieron nuevas colecciones (IA)." });
+        if (result.suggestedCollections.length > 0) {
+            toast({ title: "Colecciones Sugeridas", description: "Se añadieron nuevas colecciones (IA)." });
+        } else {
+            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones para este prompt." });
+        }
       } else {
+        console.error(`[ImageCard] Error or no suggested collections from suggestTagsAction for imageId ${image.id}:`, result.error);
         toast({ title: "Error al Sugerir", description: result.error || "No se pudieron obtener sugerencias.", variant: "destructive" });
       }
     } catch (error) {
+      console.error(`[ImageCard] Catch block error in handleSuggestCollections for imageId ${image.id}:`, error);
       toast({ title: "Error", description: "Ocurrió un problema al sugerir colecciones.", variant: "destructive" });
     } finally {
       setIsSuggestingTags(false);

@@ -55,20 +55,36 @@ const SuggestTagsServerInputSchema = z.object({
 export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServerInputSchema>) {
   const validation = SuggestTagsServerInputSchema.safeParse(values);
   if (!validation.success) {
+    console.error("[suggestTagsAction] Input validation failed:", validation.error.flatten());
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
   
+  console.log("[suggestTagsAction] Received values:", values);
+
   try {
     const genkitInput: SuggestTagsInput = { prompt: validation.data.prompt };
+    console.log("[suggestTagsAction] Calling suggestTagsFlow with input:", genkitInput);
     const result = await suggestTagsFlow(genkitInput); 
+    console.log("[suggestTagsAction] Result from suggestTagsFlow:", result);
 
     if (result.tags && result.tags.length > 0) {
-      await updateGeneratedImage(validation.data.imageId, { collections: result.tags });
+      console.log("[suggestTagsAction] Tags found, attempting to update DB. ImageId:", validation.data.imageId, "Collections:", result.tags);
+      try {
+        await updateGeneratedImage(validation.data.imageId, { collections: result.tags });
+        console.log("[suggestTagsAction] Successfully updated DB for imageId:", validation.data.imageId);
+      } catch (dbError) {
+        console.error("[suggestTagsAction] Error updating DB for imageId:", validation.data.imageId, dbError);
+        // Optionally, you might want to return an error here or just rely on the client-side update
+      }
+    } else {
+      console.log("[suggestTagsAction] No tags returned from AI or tags array is empty.");
     }
     
-    return { success: true, suggestedCollections: result.tags || [] };
+    const suggestedCollections = result.tags || [];
+    console.log("[suggestTagsAction] Returning success with suggestedCollections:", suggestedCollections);
+    return { success: true, suggestedCollections: suggestedCollections };
   } catch (error) {
-    console.error("Error suggesting tags/collections:", error);
+    console.error("[suggestTagsAction] Error in suggestTagsAction:", error);
     const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones.";
     return { error: errorMessage };
   }

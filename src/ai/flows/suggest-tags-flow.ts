@@ -32,7 +32,7 @@ const prompt = ai.definePrompt({
   name: 'suggestTagsPrompt',
   input: {schema: SuggestTagsInputSchema},
   output: {schema: SuggestTagsOutputSchema},
-  prompt: `You are an expert image categorization AI. Your task is to suggest 3 to 5 relevant keywords or short phrases that can be used as 'collections' to categorize an image generated from the following prompt.
+  prompt: `You are an expert image categorization AI. Your task is to suggest 3 to 5 relevant keywords or short phrases (collections) that can be used to categorize an image generated from the following prompt.
 
 Return your suggestions ONLY as a valid JSON array of strings. For example: ["Landscapes", "Portraits", "Futuristic City"]
 
@@ -50,26 +50,31 @@ const suggestTagsFlow = ai.defineFlow(
     outputSchema: SuggestTagsOutputSchema,
   },
   async (input) => {
+    console.log('[suggestTagsFlow] Input:', input);
     const genkitResponse = await prompt(input);
+    console.log('[suggestTagsFlow] Genkit raw output:', genkitResponse.output); // Log raw output
+
     if (!genkitResponse.output || !Array.isArray(genkitResponse.output.tags)) {
       console.error(
-        'Tag suggestion flow: Genkit prompt did not return a valid output matching schema. Expected an object with a "tags" array.',
+        '[suggestTagsFlow] Genkit prompt did not return a valid output matching schema. Expected an object with a "tags" array.',
         'Input:', input,
-        'Full Genkit Response:', genkitResponse 
+        'Full Genkit Response:', genkitResponse
       );
       // Attempt to parse if output is a stringified JSON array by mistake
       if (typeof genkitResponse.output === 'string') {
         try {
           const parsedOutput = JSON.parse(genkitResponse.output);
           if (Array.isArray(parsedOutput)) {
+            console.log('[suggestTagsFlow] Successfully parsed string output into array:', parsedOutput);
             return { tags: parsedOutput };
           }
         } catch (e) {
-          // Parsing failed, stick to original error
+          console.error('[suggestTagsFlow] Failed to parse string output as JSON array:', e);
         }
       }
       throw new Error('La IA no pudo generar sugerencias de colecciones válidas. Revisa los logs del servidor para más detalles.');
     }
+    console.log('[suggestTagsFlow] Successfully processed output:', genkitResponse.output);
     return genkitResponse.output;
   }
 );

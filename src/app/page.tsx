@@ -42,7 +42,7 @@ export default function HomePage() {
 
   useEffect(() => {
     loadImages(currentFilters);
-  }, [loadImages]);
+  }, [loadImages, currentFilters]); // Added currentFilters to dependency array
 
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
@@ -91,18 +91,20 @@ export default function HomePage() {
 
   // Handles updates to AI-suggested collections
   const handleCollectionsUpdated = (id: string, newCollections: string[]) => {
+    console.log(`[HomePage] handleCollectionsUpdated called for imageId: ${id} with newCollections:`, newCollections);
     setImages(prevImages =>
       prevImages.map(img =>
         img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
       )
     );
     // No toast here as suggestTagsAction already updates DB and ImageCard shows toast.
+    console.log(`[HomePage] Images state updated for imageId: ${id}. Current images state:`, images);
   };
 
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
-    loadImages(filters);
+    // loadImages will be called by the useEffect due to currentFilters change
   };
 
   const openClearHistoryDialog = () => {
