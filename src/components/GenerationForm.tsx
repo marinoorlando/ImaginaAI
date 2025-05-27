@@ -44,12 +44,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
 
   const promptValue = watch('prompt');
 
-
-  // Effect to synchronize currentTags (React state) with RHF's 'tags' field
   useEffect(() => {
-    // `setValue` updates RHF's internal state for the 'tags' field.
-    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
-    // whenever currentTags changes, providing immediate feedback.
     setValue('tags', currentTags.join(','), { shouldValidate: true });
   }, [currentTags, setValue]);
 
@@ -73,14 +68,11 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   };
   
   async function onSubmit(data: FormData) {
-    // By the time onSubmit is called by RHF's handleSubmit,
-    // RHF has already validated the form data, including 'data.tags'
-    // which should be up-to-date thanks to the useEffect hook.
-    // Thus, currentTags should not be empty if validation passed.
-
     setIsGenerating(true);
     try {
-      const result = await generateImageAction({ prompt: data.prompt });
+      // The 'artisticStyle' is part of GenerateImageServerInputSchema but not strictly used by the Genkit flow yet.
+      // We pass it as undefined for now.
+      const result = await generateImageAction({ prompt: data.prompt, artisticStyle: undefined });
 
       if (result.error) {
         toast({
@@ -91,23 +83,24 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         return;
       }
 
-      if (result.success && result.imageUrl) {
-        const response = await fetch(result.imageUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.statusText}`);
+      if (result.success && result.imageDataUri) {
+        // Convert data URI to Blob
+        const fetchRes = await fetch(result.imageDataUri);
+        if (!fetchRes.ok) {
+          throw new Error(`Failed to process image data URI: ${fetchRes.statusText}`);
         }
-        const imageBlob = await response.blob();
+        const imageBlob = await fetchRes.blob();
         
         const newImage: GeneratedImage = {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
-          tags: currentTags, // Use the React state currentTags for the actual array
+          tags: currentTags,
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
-          originalUrl: result.imageUrl,
+          // originalUrl is not set here as we have the data URI then blob
         };
 
         onImageGenerated(newImage);
@@ -115,14 +108,17 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           title: "¡Imagen Generada!",
           description: "La imagen ha sido añadida a tu historial.",
         });
-        reset(); // Resets RHF fields to defaultValues
-        setCurrentTags([]); // Reset local tag state
+        reset(); 
+        setCurrentTags([]); 
+      } else if (result.success && !result.imageDataUri) {
+        // Should not happen if success is true, but as a safeguard
+        throw new Error("Image generation reported success but no image data was returned.");
       }
     } catch (error) {
       console.error("Generation error:", error);
       toast({
         title: "Error",
-        description: "Ocurrió un problema al generar o procesar la imagen.",
+        description: error instanceof Error ? error.message : "Ocurrió un problema al generar o procesar la imagen.",
         variant: "destructive",
       });
     } finally {
@@ -162,7 +158,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
             <Label htmlFor="tags-input">Etiquetas (separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
-                {/* Hidden input for RHF to be aware of the 'tags' field. Value sync handled by useEffect. */}
                 <input type="hidden" {...register("tags")} />
                 <Input
                     id="tags-input"
@@ -174,7 +169,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
                     aria-describedby="tags-error"
                 />
             </div>
-            {/* Display RHF error for the 'tags' field */}
             {errors.tags && <p id="tags-error" className="text-sm text-destructive">{errors.tags.message}</p>}
             <div className="flex flex-wrap gap-2 mt-2">
               {currentTags.map(tag => (
