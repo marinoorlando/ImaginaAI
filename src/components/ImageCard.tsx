@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, Edit3, AlertTriangle, Loader2, Tags, Wand2 } from 'lucide-react'; // Added Tags, Wand2
+import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction } from '@/actions/imageActions';
@@ -41,7 +41,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
-  const [isSuggestingTags, setIsSuggestingTags] = useState(false); // Now for "collections"
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
 
   useEffect(() => {
     if (image.imageData) {
@@ -74,12 +74,12 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
       .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt.", variant: "destructive" }));
   };
 
-  const handleSuggestCollections = async () => { // Renamed for clarity
+  const handleSuggestCollections = async () => {
     setIsSuggestingTags(true);
     try {
       const result = await suggestTagsAction({ imageId: image.id, prompt: image.prompt });
       if (result.success && result.suggestedCollections) {
-        onCollectionsUpdated(image.id, result.suggestedCollections); // Update parent state
+        onCollectionsUpdated(image.id, result.suggestedCollections); 
         toast({ title: "Colecciones Sugeridas", description: "Se añadieron nuevas colecciones (IA)." });
       } else {
         toast({ title: "Error al Sugerir", description: result.error || "No se pudieron obtener sugerencias.", variant: "destructive" });
@@ -97,8 +97,6 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
       description: `${feature} estará disponible pronto.`,
     });
   };
-
-  // TODO: Implement manual tag editing UI if needed. For now, onUpdateTags is passed but not directly used by a button here.
 
   return (
     <TooltipProvider>
@@ -143,7 +141,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
           <div>
             {(image.collections && image.collections.length > 0) && (
               <>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Colecciones (IA):</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-1">Colecciones (IA):</p>
                 <div className="flex flex-wrap gap-1">
                   {(image.collections || []).slice(0, 3).map(col => (
                     <Badge key={`col-${col}`} variant="outline" className="text-xs border-blue-500 text-blue-700">{col}</Badge>
