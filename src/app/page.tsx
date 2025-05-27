@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { StatisticsDialog } from '@/components/StatisticsDialog'; // Nuevo Import
 
 export default function HomePage() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
@@ -27,6 +28,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [currentFilters, setCurrentFilters] = useState<{ searchTerm?: string; isFavorite?: true | undefined }>({});
   const [isClearHistoryDialogOpen, setIsClearHistoryDialogOpen] = useState(false);
+  const [isStatisticsDialogOpen, setIsStatisticsDialogOpen] = useState(false); // Nuevo estado
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters) => {
@@ -99,6 +101,12 @@ export default function HomePage() {
         img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
       )
     );
+     // Optionally, you might want to re-save to DB here if this function implies a permanent change.
+     // For now, assuming this is mostly for UI consistency after an AI suggestion on an existing image.
+     updateGeneratedImage(id, { collections: newCollections }).catch(err => {
+      console.error("Error saving updated collections to DB:", err);
+      toast({ title: "Error", description: "No se pudieron guardar las colecciones actualizadas.", variant: "destructive" });
+    });
   };
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
@@ -134,7 +142,7 @@ export default function HomePage() {
       const exportedImages: ExportedGeneratedImage[] = await Promise.all(
         allImages.map(async (img) => ({
           ...img,
-          imageData: await blobToDataURI(img.imageData),
+          imageData: await blobToDataURI(img.imageData), // Convert Blob to Data URI
           createdAt: img.createdAt.toISOString(),
           updatedAt: img.updatedAt.toISOString(),
         }))
@@ -188,7 +196,7 @@ export default function HomePage() {
             continue;
         }
         try {
-            const imageBlob = await dataURIToBlob(item.imageData);
+            const imageBlob = await dataURIToBlob(item.imageData); // Convert Data URI back to Blob
             const newImage: GeneratedImage = {
               id: item.id,
               prompt: item.prompt,
@@ -232,12 +240,17 @@ export default function HomePage() {
     }
   };
 
+  const openStatisticsDialog = () => {
+    setIsStatisticsDialogOpen(true);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader 
         onClearHistory={openClearHistoryDialog}
         onExportHistory={handleExportHistory}
         onImportHistory={handleImportHistory}
+        onShowStatistics={openStatisticsDialog} // Nueva prop
       />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -282,6 +295,13 @@ export default function HomePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StatisticsDialog
+        open={isStatisticsDialogOpen}
+        onOpenChange={setIsStatisticsDialogOpen}
+        images={images} // Pasar las imágenes al diálogo
+      />
+
       <input
         type="file"
         ref={fileInputRef}
@@ -292,4 +312,3 @@ export default function HomePage() {
     </div>
   );
 }
-

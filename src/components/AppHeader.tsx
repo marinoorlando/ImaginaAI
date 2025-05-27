@@ -18,9 +18,10 @@ interface AppHeaderProps {
   onClearHistory: () => void;
   onExportHistory: () => void;
   onImportHistory: () => void;
+  onShowStatistics: () => void; // Nueva prop
 }
 
-export function AppHeader({ onClearHistory, onExportHistory, onImportHistory }: AppHeaderProps) {
+export function AppHeader({ onClearHistory, onExportHistory, onImportHistory, onShowStatistics }: AppHeaderProps) {
   const { toast } = useToast();
   // Mock admin state - in a real app, this would come from an auth context
   const [isAdmin, setIsAdmin] = React.useState(true); 
@@ -45,7 +46,7 @@ export function AppHeader({ onClearHistory, onExportHistory, onImportHistory }: 
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <h1 className="text-xl font-bold text-primary">Imagina AI HR</h1>
         <nav className="flex items-center space-x-2 md:space-x-4">
-          <Button variant="ghost" size="sm" onClick={() => handleNotImplemented("Estadísticas")}>
+          <Button variant="ghost" size="sm" onClick={onShowStatistics}> {/* Actualizado onClick */}
             <BarChart2 className="h-4 w-4 mr-2" />
             Estadísticas
           </Button>
