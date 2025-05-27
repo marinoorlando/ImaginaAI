@@ -29,7 +29,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     const genkitResult = await generateImageWithGenkitFlow({ prompt });
     console.log("[generateImageAction] Result from generateImageWithGenkitFlow:", genkitResult);
 
-    // 2. Suggest collections (tags) for the generated image
+    // 2. Suggest collections (tags) for the generated image automatically
     try {
       console.log("[generateImageAction] Calling suggestTagsFlow with prompt for auto-suggestion:", prompt);
       const tagsResult = await suggestTagsFlow({ prompt });
@@ -78,34 +78,36 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
   
+  const { imageId, prompt: imagePrompt } = validation.data;
   console.log("[suggestTagsAction] Received values:", values);
 
   try {
-    const genkitInput: SuggestTagsInput = { prompt: validation.data.prompt };
+    const genkitInput: SuggestTagsInput = { prompt: imagePrompt };
     console.log("[suggestTagsAction] Calling suggestTagsFlow with input:", genkitInput);
     const result = await suggestTagsFlow(genkitInput); 
     console.log("[suggestTagsAction] Result from suggestTagsFlow:", result);
 
-    if (result.tags && result.tags.length > 0) {
-      console.log("[suggestTagsAction] Tags found, attempting to update DB. ImageId:", validation.data.imageId, "Collections:", result.tags);
-      try {
-        await updateGeneratedImage(validation.data.imageId, { collections: result.tags });
-        console.log("[suggestTagsAction] Successfully updated DB for imageId:", validation.data.imageId);
-      } catch (dbError) {
-        console.error("[suggestTagsAction] Error updating DB for imageId:", validation.data.imageId, dbError);
-        // Optionally, you might want to return an error here or just rely on the client-side update
-      }
-    } else {
-      console.log("[suggestTagsAction] No tags returned from AI or tags array is empty.");
-    }
+    // `result.tags` will be an array, possibly empty, if suggestTagsFlow is successful
+    // If suggestTagsFlow throws an error, this part won't be reached.
+    const collectionsToUpdate = result.tags || []; // Ensure it's always an array
+
+    console.log(`[suggestTagsAction] Collections from AI for imageId ${imageId}:`, collectionsToUpdate);
     
-    const suggestedCollectionsResult = result.tags || [];
-    console.log("[suggestTagsAction] Returning success with suggestedCollections:", suggestedCollectionsResult);
-    return { success: true, suggestedCollections: suggestedCollectionsResult }; // Ensure key matches what ImageCard expects
-  } catch (error) {
-    console.error("[suggestTagsAction] Error in suggestTagsAction:", error);
-    const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones.";
-    return { error: errorMessage };
+    try {
+      console.log(`[suggestTagsAction] Attempting to update DB for imageId: ${imageId} with collections:`, collectionsToUpdate);
+      await updateGeneratedImage(imageId, { collections: collectionsToUpdate });
+      console.log(`[suggestTagsAction] Successfully updated DB for imageId: ${imageId}`);
+      return { success: true, suggestedCollections: collectionsToUpdate };
+    } catch (dbError) {
+      console.error(`[suggestTagsAction] Error updating DB for imageId: ${imageId}`, dbError);
+      const dbErrorMessage = dbError instanceof Error ? dbError.message : "Error al guardar las colecciones en la base de datos.";
+      return { error: `Error de base de datos: ${dbErrorMessage}`, suggestedCollections: [] }; // Return empty if DB fails
+    }
+
+  } catch (error) { // Catch errors from suggestTagsFlow (AI suggestion part)
+    console.error("[suggestTagsAction] Error in suggestTagsFlow execution:", error);
+    const errorMessage = error instanceof Error ? error.message : "Error al sugerir colecciones con IA.";
+    return { error: errorMessage, suggestedCollections: [] };
   }
 }
 

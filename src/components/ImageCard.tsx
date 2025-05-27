@@ -85,17 +85,27 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
         console.log(`[ImageCard] Calling onCollectionsUpdated for imageId ${image.id} with collections:`, result.suggestedCollections);
         onCollectionsUpdated(image.id, result.suggestedCollections); 
         if (result.suggestedCollections.length > 0) {
-            toast({ title: "Colecciones Sugeridas", description: "Se añadieron nuevas colecciones (IA)." });
+            toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
         } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones para este prompt." });
+            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones existentes (si las hay) se han borrado." });
         }
       } else {
+        // This 'else' handles cases where result.success is false or suggestedCollections is missing,
+        // or if result.error is present.
         console.error(`[ImageCard] Error or no suggested collections from suggestTagsAction for imageId ${image.id}:`, result.error);
-        toast({ title: "Error al Sugerir", description: result.error || "No se pudieron obtener sugerencias.", variant: "destructive" });
+        toast({ 
+            title: "Error al Sugerir Colecciones", 
+            description: result.error || "No se pudieron obtener sugerencias o guardarlas en la base de datos.", 
+            variant: "destructive" 
+        });
       }
-    } catch (error) {
+    } catch (error) { // Catch unexpected errors during the action call itself
       console.error(`[ImageCard] Catch block error in handleSuggestCollections for imageId ${image.id}:`, error);
-      toast({ title: "Error", description: "Ocurrió un problema al sugerir colecciones.", variant: "destructive" });
+      toast({ 
+          title: "Error Inesperado", 
+          description: "Ocurrió un problema al procesar la solicitud de sugerir colecciones.", 
+          variant: "destructive" 
+      });
     } finally {
       setIsSuggestingTags(false);
     }
