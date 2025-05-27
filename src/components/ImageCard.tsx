@@ -10,7 +10,7 @@ import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
-import { updateGeneratedImage } from '@/lib/db'; // Removed db import as it is not directly used
+import { updateGeneratedImage } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import {
   AlertDialog,
@@ -184,6 +184,7 @@ export function ImageCard({
         artisticStyle: image.artisticStyle || 'none',
         aspectRatio: image.aspectRatio || '1:1',
         imageQuality: image.imageQuality || 'standard',
+        initialTags: image.tags, // Pass original tags
       });
 
       if (result.error) {
@@ -203,7 +204,7 @@ export function ImageCard({
           artisticStyle: result.artisticStyle || 'none', 
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: [], 
+          tags: result.tags, // Use tags from action result (which includes initialTags)
           collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false, 

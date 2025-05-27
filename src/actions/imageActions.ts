@@ -11,6 +11,7 @@ const GenerateImageServerInputSchema = z.object({
   artisticStyle: z.string().optional(),
   aspectRatio: z.string().optional(),
   imageQuality: z.string().optional(),
+  initialTags: z.array(z.string()).optional(), // Added for regeneration
 });
 
 export async function generateImageAction(values: z.infer<typeof GenerateImageServerInputSchema>) {
@@ -20,7 +21,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
     return { error: "Entrada inválida.", details: validation.error.flatten() };
   }
 
-  const { prompt, artisticStyle, aspectRatio, imageQuality } = validation.data;
+  const { prompt, artisticStyle, aspectRatio, imageQuality, initialTags } = validation.data;
   let suggestedCollections: string[] = [];
 
   try {
@@ -55,6 +56,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
       artisticStyle: artisticStyle || 'none',
       aspectRatio: aspectRatio || '1:1',
       imageQuality: imageQuality || 'standard',
+      tags: initialTags || [], // Use initialTags if provided, otherwise empty
       collections: suggestedCollections,
       modelUsed: genkitResult.modelUsed,
       createdAt: new Date().toISOString(),
