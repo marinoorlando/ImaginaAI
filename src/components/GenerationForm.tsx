@@ -101,7 +101,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   }, []);
 
   useEffect(() => {
-    setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 || formSchema.shape.tags.safeParse('').success === false });
+    setValue('tags', currentTags.join(','), { shouldValidate: true });
   }, [currentTags, setValue]);
 
   const handleTagInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,6 +158,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
+          artisticStyle: result.artisticStyle || data.artisticStyle || 'none', // Save artistic style
           tags: currentTags, 
           collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
@@ -326,5 +327,3 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     </Card>
   );
 }
-
-    

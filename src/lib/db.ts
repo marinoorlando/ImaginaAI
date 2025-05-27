@@ -7,12 +7,10 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(3).stores({ // Incremented version to 3
-      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt',
-      // Added *collections for AI-suggested tags
+    this.version(4).stores({ // Incremented version to 4
+      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle',
+      // Added artisticStyle
     });
-    // Dexie handles upgrading from previous versions.
-    // Old entries won't have 'collections', it will be undefined.
   }
 }
 
@@ -25,7 +23,8 @@ export async function addGeneratedImage(image: GeneratedImage): Promise<string> 
     const imageToAdd: GeneratedImage = {
       ...image,
       tags: image.tags || [],
-      collections: image.collections || [], // Ensure collections is initialized
+      collections: image.collections || [],
+      artisticStyle: image.artisticStyle || 'none',
       createdAt: image.createdAt || new Date(),
       updatedAt: image.updatedAt || new Date(),
     };
@@ -52,7 +51,8 @@ export async function getAllGeneratedImages(sortBy: keyof GeneratedImage = 'crea
 export async function getGeneratedImageById(id: string): Promise<GeneratedImage | undefined> {
   try {
     return await db.generatedImages.get(id);
-  } catch (error) {
+  } catch (error)
+ {
     console.error(`Failed to get image with id ${id}:`, error);
     return undefined;
   }
@@ -60,6 +60,8 @@ export async function getGeneratedImageById(id: string): Promise<GeneratedImage 
 
 export async function updateGeneratedImage(id: string, changes: Partial<Omit<GeneratedImage, 'id' | 'imageData'>>): Promise<number> {
   try {
+    // Note: This function cannot update imageData directly due to the Omit type.
+    // For imageData updates, use a direct Dexie update: db.generatedImages.update(id, { imageData: newBlob, ... })
     return await db.generatedImages.update(id, { ...changes, updatedAt: new Date() });
   } catch (error) {
     console.error(`Failed to update image with id ${id}:`, error);
@@ -86,17 +88,17 @@ export async function toggleFavoriteStatus(id: string): Promise<number> {
 
 export async function filterImages({
   searchTerm,
-  tags, // This refers to manual tags for filtering
+  tags,
   isFavorite,
 }: {
   searchTerm?: string;
-  tags?: string[]; // Manual tags
-  isFavorite?: true | undefined; // Changed boolean to true | undefined
+  tags?: string[];
+  isFavorite?: true | undefined;
 }): Promise<GeneratedImage[]> {
   try {
     let collection = db.generatedImages.orderBy('createdAt').reverse();
 
-    if (isFavorite !== undefined) { // Check if isFavorite is explicitly true or false
+    if (isFavorite !== undefined) {
       collection = collection.filter(img => img.isFavorite === isFavorite);
     }
 
@@ -109,7 +111,6 @@ export async function filterImages({
       );
     }
     
-    // This filter is for manual tags. If filtering by collections is needed, it should be a separate param.
     if (tags && tags.length > 0) {
       collection = collection.filter(img => 
         tags.every(filterTag => img.tags.includes(filterTag))

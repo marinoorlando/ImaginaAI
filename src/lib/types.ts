@@ -12,6 +12,7 @@ export interface GeneratedImage {
   width?: number;
   height?: number;
   originalUrl?: string; // If fetched from a URL before converting to Blob
+  artisticStyle?: string; // Added for regeneration
 }
 
 // For future use with simulated login
@@ -31,4 +32,3 @@ export interface AiModel {
   apiKey?: string; // Simulated
   // Add other model-specific properties if needed
 }
-

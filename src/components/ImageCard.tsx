@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { suggestTagsAction } from '@/actions/imageActions';
-import { updateGeneratedImage } from '@/lib/db';
+import { suggestTagsAction, regenerateExistingImageAction } from '@/actions/imageActions';
+import { updateGeneratedImage, db } from '@/lib/db';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,29 +41,47 @@ interface ImageCardProps {
   image: GeneratedImage;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
-  onUpdateTags: (id: string, newTags: string[]) => void; // For manual tags
-  onCollectionsUpdated: (id: string, newCollections: string[]) => void; // For AI collections
+  onUpdateTags: (id: string, newTags: string[]) => void;
+  onCollectionsUpdated: (id: string, newCollections: string[]) => void;
+  onImageRegenerated: (
+    id: string, 
+    newImageData: Blob, 
+    newCollections: string[], 
+    newModelUsed: string,
+    prompt: string,
+    artisticStyle?: string
+  ) => void;
 }
 
-export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onCollectionsUpdated }: ImageCardProps) {
+export function ImageCard({ 
+  image, 
+  onToggleFavorite, 
+  onDelete, 
+  onUpdateTags, 
+  onCollectionsUpdated,
+  onImageRegenerated
+}: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
   const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
-    if (image.imageData) {
+    if (image.imageData instanceof Blob) {
       const url = URL.createObjectURL(image.imageData);
       setImageUrl(url);
       setIsLoadingImageUrl(false);
       return () => URL.revokeObjectURL(url);
     } else {
+      console.warn(`Image data for ${image.id} is not a Blob:`, image.imageData);
       setIsLoadingImageUrl(false);
+      setImageUrl(null); // Ensure no old URL is shown
     }
-  }, [image.imageData]);
+  }, [image.imageData, image.id]);
 
   const handleDownload = () => {
-    if (imageUrl && image.imageData) {
+    if (imageUrl && image.imageData instanceof Blob) {
       const link = document.createElement('a');
       link.href = imageUrl;
       link.download = `imagina-ai-${image.id.substring(0,8)}.${image.imageData.type.split('/')[1] || 'png'}`;
@@ -95,13 +113,13 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
 
       if (result.success && result.suggestedCollections) {
         await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
-        console.log(`[ImageCard] Successfully updated DB for imageId: ${image.id} with collections:`, result.suggestedCollections);
+        console.log(`[ImageCard] Successfully updated DB (via client) for imageId: ${image.id} with collections:`, result.suggestedCollections);
         onCollectionsUpdated(image.id, result.suggestedCollections);
         
         if (result.suggestedCollections.length > 0) {
             toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
         } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado." });
+            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado (a vacías si no había)." });
         }
       } else {
         console.error(`[ImageCard] Error or no suggested collections from suggestTagsAction for imageId ${image.id}:`, result.error);
@@ -123,14 +141,47 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
       setIsSuggestingTags(false);
     }
   };
-  
-  const handleNotImplemented = (feature: string) => {
-    toast({
-      title: "Función no implementada",
-      description: `${feature} estará disponible pronto.`,
-    });
-  };
 
+  const handleRegenerate = async () => {
+    setIsRegenerating(true);
+    toast({ title: "Regenerando Imagen...", description: "Por favor espera." });
+    try {
+      const result = await regenerateExistingImageAction({
+        originalImageId: image.id,
+        prompt: image.prompt,
+        artisticStyle: image.artisticStyle || 'none',
+      });
+
+      if (result.error) {
+        toast({ title: "Error de Regeneración", description: result.error, variant: "destructive" });
+        return;
+      }
+
+      if (result.success && result.imageDataUri) {
+        const fetchRes = await fetch(result.imageDataUri);
+        if (!fetchRes.ok) throw new Error("Failed to fetch regenerated image data URI");
+        const newImageBlob = await fetchRes.blob();
+        
+        onImageRegenerated(
+          result.originalImageId, 
+          newImageBlob, 
+          result.collections || [], 
+          result.modelUsed || 'Desconocido',
+          result.prompt, // pass original prompt back for potential DB update
+          result.artisticStyle // pass original artisticStyle back for potential DB update
+        );
+        toast({ title: "Imagen Regenerada", description: "La imagen ha sido actualizada." });
+      } else {
+        throw new Error("Regeneration failed or did not return image data.");
+      }
+    } catch (error) {
+      console.error("Error regenerating image:", error);
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Ocurrió un problema al regenerar la imagen.", variant: "destructive" });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+  
   return (
     <TooltipProvider>
       <Dialog>
@@ -149,8 +200,8 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
                   <Image
                     src={imageUrl}
                     alt={image.prompt}
-                    layout="fill"
-                    objectFit="cover"
+                    fill={true}
+                    style={{objectFit: "cover"}}
                     data-ai-hint="abstract art"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
@@ -193,6 +244,7 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
               )}
             </div>
             <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
+             {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {artisticStyles.find(s => s.value === image.artisticStyle)?.label || image.artisticStyle}</p>}
             <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
           </div>
           <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
@@ -266,8 +318,8 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => handleNotImplemented("Regenerar")}>
-                  <RefreshCw className="h-4 w-4" />
+                <Button variant="ghost" size="icon" onClick={handleRegenerate} disabled={isRegenerating}>
+                  {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   <span className="sr-only">Regenerar Imagen</span>
                 </Button>
               </TooltipTrigger>
@@ -284,8 +336,8 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
               <Image
                 src={imageUrl}
                 alt={image.prompt}
-                layout="fill"
-                objectFit="contain"
+                fill={true}
+                style={{objectFit: "contain"}}
               />
             )}
           </div>
@@ -294,3 +346,22 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
     </TooltipProvider>
   );
 }
+
+// Need to make artisticStyles accessible for display
+const artisticStyles = [
+  { value: 'none', label: 'Ninguno (Por defecto)' },
+  { value: 'Photorealistic', label: 'Fotorrealista' },
+  { value: 'Cartoon', label: 'Dibujo Animado' },
+  { value: 'Watercolor', label: 'Acuarela' },
+  { value: 'Oil Painting', label: 'Pintura al Óleo' },
+  { value: 'Pixel Art', label: 'Pixel Art' },
+  { value: 'Anime', label: 'Anime' },
+  { value: 'Cyberpunk', label: 'Cyberpunk' },
+  { value: 'Fantasy Art', label: 'Arte Fantástico' },
+  { value: 'Abstract', label: 'Abstracto' },
+  { value: 'Impressionistic', label: 'Impresionista'},
+  { value: 'Steampunk', label: 'Steampunk' },
+  { value: 'Vintage Photography', label: 'Fotografía Vintage'},
+  { value: 'Line Art', label: 'Arte Lineal'},
+  { value: '3D Render', label: 'Render 3D'},
+];

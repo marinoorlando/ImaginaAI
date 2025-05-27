@@ -42,7 +42,7 @@ export default function HomePage() {
 
   useEffect(() => {
     loadImages(currentFilters);
-  }, [loadImages, currentFilters]); // Added currentFilters to dependency array
+  }, [loadImages, currentFilters]);
 
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
@@ -77,7 +77,6 @@ export default function HomePage() {
     }
   };
   
-  // Handles updates to manual tags
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
@@ -89,7 +88,6 @@ export default function HomePage() {
     }
   };
 
-  // Handles updates to AI-suggested collections
   const handleCollectionsUpdated = (id: string, newCollections: string[]) => {
     console.log(`[HomePage] handleCollectionsUpdated called for imageId: ${id} with newCollections:`, newCollections);
     setImages(prevImages =>
@@ -97,14 +95,53 @@ export default function HomePage() {
         img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
       )
     );
-    // No toast here as suggestTagsAction already updates DB and ImageCard shows toast.
     console.log(`[HomePage] Images state updated for imageId: ${id}. Current images state:`, images);
   };
 
+  const handleImageRegenerated = async (
+    id: string, 
+    newImageData: Blob, 
+    newCollections: string[], 
+    newModelUsed: string,
+    prompt: string,
+    artisticStyle?: string
+  ) => {
+    try {
+      // Update directly in Dexie since we have the Blob and other fields
+      await db.generatedImages.update(id, {
+        imageData: newImageData,
+        collections: newCollections,
+        modelUsed: newModelUsed,
+        prompt: prompt, // Ensure prompt and artisticStyle are also updated if they could change
+        artisticStyle: artisticStyle || 'none',
+        updatedAt: new Date(),
+      });
+
+      // Update local state
+      setImages(prevImages =>
+        prevImages.map(img =>
+          img.id === id
+            ? { 
+                ...img, 
+                imageData: newImageData, 
+                collections: newCollections, 
+                modelUsed: newModelUsed,
+                prompt: prompt,
+                artisticStyle: artisticStyle || 'none',
+                updatedAt: new Date(),
+              }
+            : img
+        )
+      );
+      toast({ title: "Imagen Actualizada", description: "La imagen se ha regenerado y actualizado en el historial." });
+    } catch (error) {
+      console.error("Error updating regenerated image in DB or state:", error);
+      toast({ title: "Error al Actualizar", description: "No se pudo actualizar la imagen regenerada.", variant: "destructive" });
+    }
+  };
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
-    // loadImages will be called by the useEffect due to currentFilters change
   };
 
   const openClearHistoryDialog = () => {
@@ -139,8 +176,9 @@ export default function HomePage() {
               images={images} 
               onToggleFavorite={handleToggleFavorite}
               onDeleteImage={handleDeleteImage}
-              onUpdateTags={handleUpdateTags} // For manual tags
-              onCollectionsUpdated={handleCollectionsUpdated} // For AI collections
+              onUpdateTags={handleUpdateTags}
+              onCollectionsUpdated={handleCollectionsUpdated}
+              onImageRegenerated={handleImageRegenerated}
               isLoading={isLoading}
             />
           </div>
