@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, Maximize, Edit3, AlertTriangle, Loader2 } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, Edit3, AlertTriangle, Loader2 } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction } from '@/actions/imageActions';
@@ -22,6 +22,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from './ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ImageCardProps {
   image: GeneratedImage;
@@ -93,56 +99,79 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
   };
 
   return (
-    <Card className="flex flex-col overflow-hidden shadow-lg h-full">
-      <CardHeader className="p-4">
-        <CardTitle className="text-sm font-semibold truncate" title={image.prompt}>
-          {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 relative aspect-square flex-grow">
-        {isLoadingImageUrl ? (
-           <Skeleton className="w-full h-full" />
-        ) : imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={image.prompt}
-            layout="fill"
-            objectFit="cover"
-            data-ai-hint="abstract art"
-          />
-        ) : (
-          <div className="w-full h-full bg-muted flex items-center justify-center">
-            <AlertTriangle className="w-12 h-12 text-destructive" />
-            <span className="ml-2 text-destructive">Error al cargar imagen</span>
+    <TooltipProvider>
+      <Card className="flex flex-col overflow-hidden shadow-lg h-full">
+        <CardHeader className="p-4">
+          <CardTitle className="text-sm font-semibold truncate" title={image.prompt}>
+            {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 relative aspect-square flex-grow">
+          {isLoadingImageUrl ? (
+             <Skeleton className="w-full h-full" />
+          ) : imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={image.prompt}
+              layout="fill"
+              objectFit="cover"
+              data-ai-hint="abstract art"
+            />
+          ) : (
+            <div className="w-full h-full bg-muted flex items-center justify-center">
+              <AlertTriangle className="w-12 h-12 text-destructive" />
+              <span className="ml-2 text-destructive">Error al cargar imagen</span>
+            </div>
+          )}
+        </CardContent>
+        <div className="p-4 space-y-2">
+          <div className="flex flex-wrap gap-1">
+            {image.tags.slice(0, 3).map(tag => (
+              <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+            ))}
+            {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
           </div>
-        )}
-      </CardContent>
-      <div className="p-4 space-y-2">
-        <div className="flex flex-wrap gap-1">
-          {image.tags.slice(0, 3).map(tag => (
-            <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-          ))}
-          {image.tags.length > 3 && <Badge variant="outline" className="text-xs">+{image.tags.length - 3}</Badge>}
+          <p className="text-xs text-muted-foreground">Modelo: {image.modelUsed}</p>
+          <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
         </div>
-        <p className="text-xs text-muted-foreground">Modelo: {image.modelUsed}</p>
-        <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
-      </div>
-      <CardFooter className="p-2 border-t grid grid-cols-2 sm:grid-cols-3 gap-1">
-        <Button variant="ghost" size="sm" onClick={() => onToggleFavorite(image.id)} className="flex items-center justify-start text-left w-full">
-          <Heart className={`mr-1 h-4 w-4 ${image.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-          Favorita
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleDownload} className="flex items-center justify-start text-left w-full">
-          <Download className="mr-1 h-4 w-4" />
-          Descargar
-        </Button>
-         <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="flex items-center justify-start text-left w-full text-destructive hover:text-destructive-foreground hover:bg-destructive">
-              <Trash2 className="mr-1 h-4 w-4" />
-              Eliminar
-            </Button>
-          </AlertDialogTrigger>
+        <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => onToggleFavorite(image.id)}>
+                <Heart className={`h-4 w-4 ${image.isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                <span className="sr-only">{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{image.isFavorite ? 'Desmarcar Favorita' : 'Marcar como Favorita'}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleDownload}>
+                <Download className="h-4 w-4" />
+                <span className="sr-only">Descargar Imagen</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Descargar Imagen</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive-foreground hover:bg-destructive">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Eliminar Imagen</span>
+                </Button>
+              </AlertDialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Eliminar Imagen</p>
+            </TooltipContent>
+          </Tooltip>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
@@ -157,24 +186,44 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags }: I
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>
-        <Button variant="ghost" size="sm" onClick={handleCopyPrompt} className="flex items-center justify-start text-left w-full">
-          <Copy className="mr-1 h-4 w-4" />
-          Copiar Prompt
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleSuggestTags} disabled={isSuggestingTags} className="flex items-center justify-start text-left w-full">
-           {isSuggestingTags ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Edit3 className="mr-1 h-4 w-4" />}
-          Sugerir Tags
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => handleNotImplemented("Regenerar")} className="flex items-center justify-start text-left w-full">
-          <RefreshCw className="mr-1 h-4 w-4" />
-          Regenerar
-        </Button>
-        {/* <Button variant="ghost" size="sm" onClick={() => handleNotImplemented("Zoom")} className="flex items-center justify-start text-left w-full">
-          <Maximize className="mr-1 h-4 w-4" />
-          Zoom
-        </Button> */}
-      </CardFooter>
-    </Card>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleCopyPrompt}>
+                <Copy className="h-4 w-4" />
+                <span className="sr-only">Copiar Prompt</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Copiar Prompt</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleSuggestTags} disabled={isSuggestingTags}>
+                {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
+                <span className="sr-only">Sugerir Etiquetas</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Sugerir Etiquetas</p>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={() => handleNotImplemented("Regenerar")}>
+                <RefreshCw className="h-4 w-4" />
+                <span className="sr-only">Regenerar Imagen</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Regenerar Imagen</p>
+            </TooltipContent>
+          </Tooltip>
+        </CardFooter>
+      </Card>
+    </TooltipProvider>
   );
 }
