@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,11 +28,15 @@ interface GenerationFormProps {
   onImageGenerated: (image: GeneratedImage) => void;
 }
 
+const MAX_RECENT_TAGS = 15;
+const RECENT_TAGS_STORAGE_KEY = 'imaginaAiRecentTags';
+
 export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   const { toast } = useToast();
   const [currentTags, setCurrentTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [recentTags, setRecentTags] = useState<string[]>([]);
 
   const { control, handleSubmit, register, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -44,8 +48,37 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
 
   const promptValue = watch('prompt');
 
+  // Load recent tags from localStorage on mount
   useEffect(() => {
-    setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 });
+    const storedTags = localStorage.getItem(RECENT_TAGS_STORAGE_KEY);
+    if (storedTags) {
+      try {
+        const parsedTags = JSON.parse(storedTags);
+        if (Array.isArray(parsedTags)) {
+          setRecentTags(parsedTags);
+        }
+      } catch (e) {
+        console.error("Failed to parse recent tags from localStorage", e);
+        setRecentTags([]); // Fallback to empty if parsing fails
+      }
+    }
+  }, []);
+
+  const updateRecentTags = useCallback((newlyAddedTags: string[]) => {
+    setRecentTags(prevRecentTags => {
+      const updated = [...newlyAddedTags.filter(tag => !prevRecentTags.includes(tag)), ...prevRecentTags];
+      const uniqueRecent = Array.from(new Set(updated));
+      const limitedRecent = uniqueRecent.slice(0, MAX_RECENT_TAGS);
+      localStorage.setItem(RECENT_TAGS_STORAGE_KEY, JSON.stringify(limitedRecent));
+      return limitedRecent;
+    });
+  }, []);
+
+  useEffect(() => {
+    // Sync currentTags with RHF's 'tags' field (comma-separated string)
+    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
+    // whenever currentTags changes, providing immediate feedback.
+    setValue('tags', currentTags.join(','), { shouldValidate: currentTags.length > 0 || formSchema.shape.tags.safeParse('').success === false });
   }, [currentTags, setValue]);
 
   const handleTagInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +102,12 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
 
   const clearPrompt = () => {
     setValue('prompt', '', { shouldValidate: true });
+  };
+
+  const addRecentTagToCurrent = (tag: string) => {
+    if (!currentTags.includes(tag)) {
+      setCurrentTags(prev => [...prev, tag]);
+    }
   };
   
   async function onSubmit(data: FormData) {
@@ -105,6 +144,9 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
         };
 
         onImageGenerated(newImage);
+        if (newImage.tags.length > 0) {
+          updateRecentTags(newImage.tags);
+        }
         toast({
           title: "¡Imagen Generada!",
           description: "La imagen ha sido añadida a tu historial.",
@@ -146,7 +188,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
                   <Textarea
                     id="prompt"
                     placeholder="Describe la imagen que quieres generar..."
-                    className="min-h-[100px] resize-none pr-10" // Add padding for the button
+                    className="min-h-[100px] resize-none pr-10"
                     {...field}
                   />
                 )}
@@ -195,6 +237,28 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
               ))}
             </div>
           </div>
+
+          {recentTags.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <Label>Etiquetas Recientes</Label>
+              <div className="flex flex-wrap gap-2">
+                {recentTags.map(tag => (
+                  <Badge
+                    key={`recent-${tag}`}
+                    variant="outline"
+                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => addRecentTagToCurrent(tag)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') addRecentTagToCurrent(tag); }}
+                    aria-label={`Añadir etiqueta reciente: ${tag}`}
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
         </CardContent>
         <CardFooter>
