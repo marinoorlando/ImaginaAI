@@ -246,7 +246,9 @@ export default function HomePage() {
             <FilterControls onFilterChange={handleFilterChange} />
           </div>
           <div className="lg:col-span-2">
-            <h2 className="text-2xl font-semibold mb-6 text-foreground">Historial de Imágenes</h2>
+            <h2 className="text-2xl font-semibold mb-6 text-foreground">
+              Historial de Imágenes {isLoading ? '(Cargando...)' : `(${images.length})`}
+            </h2>
             <ImageGrid 
               images={images} 
               onToggleFavorite={handleToggleFavorite}
@@ -290,3 +292,4 @@ export default function HomePage() {
     </div>
   );
 }
+
