@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, Maximize, Edit3, AlertTriangle } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, Maximize, Edit3, AlertTriangle, Loader2 } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction } from '@/actions/imageActions';
