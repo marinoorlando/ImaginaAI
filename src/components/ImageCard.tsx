@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; // Changed import
+import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
 import { updateGeneratedImage, db } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -44,7 +44,7 @@ interface ImageCardProps {
   onDelete: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => void;
   onCollectionsUpdated: (id: string, newCollections: string[]) => void;
-  onImageGenerated: (image: GeneratedImage) => void; // Changed from onImageRegenerated
+  onImageGenerated: (image: GeneratedImage) => void; 
 }
 
 // Need to make artisticStyles accessible for display if not imported from elsewhere
@@ -73,7 +73,7 @@ export function ImageCard({
   onDelete, 
   onUpdateTags, 
   onCollectionsUpdated,
-  onImageGenerated // Changed from onImageRegenerated
+  onImageGenerated 
 }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -125,6 +125,11 @@ export function ImageCard({
       const result = await suggestTagsAction({ prompt: image.prompt });
       console.log(`[ImageCard] Result from suggestTagsAction for imageId ${image.id}:`, result);
 
+      if (result.error) {
+        toast({ title: "Error al Sugerir Colecciones", description: result.error, variant: "destructive" });
+        return;
+      }
+
       if (result.success && result.suggestedCollections) {
         await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
         onCollectionsUpdated(image.id, result.suggestedCollections);
@@ -132,13 +137,14 @@ export function ImageCard({
         if (result.suggestedCollections.length > 0) {
             toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
         } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado (a vacías si no había)." });
+            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado." });
         }
       } else {
-        console.error(`[ImageCard] Error or no suggested collections from suggestTagsAction for imageId ${image.id}:`, result.error);
+        // This case should ideally be caught by result.error, but as a fallback:
+        console.error(`[ImageCard] Unexpected: No error but no suggested collections from suggestTagsAction for imageId ${image.id}:`, result);
         toast({ 
             title: "Error al Sugerir Colecciones", 
-            description: result.error || "No se pudieron obtener sugerencias de la IA.", 
+            description: "No se pudieron obtener sugerencias de la IA.", 
             variant: "destructive" 
         });
       }
@@ -175,19 +181,19 @@ export function ImageCard({
         const newImageBlob = await fetchRes.blob();
         
         const newImageEntry: GeneratedImage = {
-          id: result.id, // New ID from server
+          id: result.id, 
           imageData: newImageBlob,
-          prompt: result.prompt, // Original prompt
-          artisticStyle: result.artisticStyle || 'none', // Original style
-          tags: [], // New image starts with empty manual tags
-          collections: result.collections || [], // New AI collections
+          prompt: result.prompt, 
+          artisticStyle: result.artisticStyle || 'none', 
+          tags: [], 
+          collections: result.collections || [], 
           modelUsed: result.modelUsed || 'Desconocido',
-          isFavorite: false, // New image is not favorite by default
+          isFavorite: false, 
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
         };
         
-        onImageGenerated(newImageEntry); // Use the prop for adding a new image
+        onImageGenerated(newImageEntry); 
         toast({ title: "Nueva Imagen Generada", description: "La nueva imagen ha sido añadida al historial." });
       } else {
         throw new Error("La generación falló o no devolvió los datos necesarios.");
@@ -219,7 +225,7 @@ export function ImageCard({
                     src={imageUrl}
                     alt={image.prompt}
                     fill={true}
-                    style={{objectFit: "cover"}}
+                    style={{objectFit: "contain"}} // Changed from "cover" to "contain"
                     data-ai-hint="abstract art"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
@@ -364,3 +370,4 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
+
