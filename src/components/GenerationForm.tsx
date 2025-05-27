@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -19,8 +19,7 @@ import { Badge } from '@/components/ui/badge';
 
 const formSchema = z.object({
   prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
-  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }), // Tags entered as a comma-separated string
-  // Add other fields like artisticStyle, aspectRatio, etc. later
+  tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -43,6 +42,14 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     },
   });
 
+  // Effect to synchronize currentTags (React state) with RHF's 'tags' field
+  useEffect(() => {
+    // `setValue` updates RHF's internal state for the 'tags' field.
+    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
+    // whenever currentTags changes, providing immediate feedback.
+    control.setValue('tags', currentTags.join(','), { shouldValidate: true });
+  }, [currentTags, control]);
+
   const handleTagInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setTagInput(event.target.value);
   };
@@ -63,25 +70,10 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   };
   
   async function onSubmit(data: FormData) {
-    // Update RHF's 'tags' field value right before submission / validation
-    // This ensures the zod schema validates against the actual currentTags
-    control.setValue('tags', currentTags.join(','), { shouldValidate: true });
-    
-    // Trigger validation manually to check currentTags through RHF's 'tags' field
-    const isValid = await control.trigger();
-    if (!isValid || currentTags.length === 0) {
-        // If RHF validation for tags fails (e.g. empty string after join)
-        // or if currentTags array is empty (double check)
-        if (currentTags.length === 0 && !errors.tags) {
-             toast({
-                title: "Error de validación",
-                description: "Por favor, añade al menos una etiqueta.",
-                variant: "destructive",
-            });
-        }
-        // If RHF has an error for tags, it will be displayed by the FormMessage component
-      return;
-    }
+    // By the time onSubmit is called by RHF's handleSubmit,
+    // RHF has already validated the form data, including 'data.tags'
+    // which should be up-to-date thanks to the useEffect hook.
+    // Thus, currentTags should not be empty if validation passed.
 
     setIsGenerating(true);
     try {
@@ -97,7 +89,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
       }
 
       if (result.success && result.imageUrl) {
-        // Fetch the image from the URL and convert to Blob
         const response = await fetch(result.imageUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch image: ${response.statusText}`);
@@ -108,12 +99,12 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           id: result.id || uuidv4(),
           imageData: imageBlob,
           prompt: result.prompt || data.prompt,
-          tags: currentTags,
+          tags: currentTags, // Use the React state currentTags for the actual array
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
-          originalUrl: result.imageUrl, // Store original URL if needed
+          originalUrl: result.imageUrl,
         };
 
         onImageGenerated(newImage);
@@ -121,9 +112,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           title: "¡Imagen Generada!",
           description: "La imagen ha sido añadida a tu historial.",
         });
-        reset();
-        setCurrentTags([]);
-        control.setValue('tags', ''); // Clear RHF tags field
+        reset(); // Resets RHF fields to defaultValues
+        setCurrentTags([]); // Reset local tag state
       }
     } catch (error) {
       console.error("Generation error:", error);
@@ -169,8 +159,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
             <Label htmlFor="tags-input">Etiquetas (separadas por coma o Enter)</Label>
              <div className="flex items-center space-x-2">
                 <Tag className="h-5 w-5 text-muted-foreground" />
-                {/* Hidden input for RHF to manage the "tags" field based on currentTags */}
-                <input type="hidden" {...register("tags", { setValueAs: () => currentTags.join(',') })} />
+                {/* Hidden input for RHF to be aware of the 'tags' field. Value sync handled by useEffect. */}
+                <input type="hidden" {...register("tags")} />
                 <Input
                     id="tags-input"
                     type="text"
@@ -194,8 +184,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
               ))}
             </div>
           </div>
-
-          {/* Future controls for artistic style, aspect ratio, etc. can be added here */}
 
         </CardContent>
         <CardFooter>
