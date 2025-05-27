@@ -9,26 +9,29 @@ import { Switch } from "@/components/ui/switch";
 import { Search, X } from 'lucide-react';
 
 interface FilterControlsProps {
-  onFilterChange: (filters: { searchTerm?: string; isFavorite?: boolean }) => void;
+  onFilterChange: (filters: { searchTerm?: string; isFavorite?: true | undefined }) => void;
 }
 
 export function FilterControls({ onFilterChange }: FilterControlsProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false); // Tracks the switch state
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    onFilterChange({ searchTerm: e.target.value, isFavorite });
+    const newSearchTerm = e.target.value;
+    setSearchTerm(newSearchTerm);
+    onFilterChange({ searchTerm: newSearchTerm, isFavorite: showOnlyFavorites ? true : undefined });
   };
 
   const handleFavoriteChange = (checked: boolean) => {
-    setIsFavorite(checked);
-    onFilterChange({ searchTerm, isFavorite: checked });
+    setShowOnlyFavorites(checked);
+    // If checked (switch ON), pass true to filter by favorites.
+    // If unchecked (switch OFF), pass undefined to show all (no favorite filtering).
+    onFilterChange({ searchTerm, isFavorite: checked ? true : undefined });
   };
 
   const clearSearch = () => {
     setSearchTerm('');
-    onFilterChange({ searchTerm: '', isFavorite });
+    onFilterChange({ searchTerm: '', isFavorite: showOnlyFavorites ? true : undefined });
   };
 
   return (
@@ -57,7 +60,7 @@ export function FilterControls({ onFilterChange }: FilterControlsProps) {
       <div className="flex items-center space-x-2">
         <Switch
           id="favorite-filter"
-          checked={isFavorite}
+          checked={showOnlyFavorites}
           onCheckedChange={handleFavoriteChange}
         />
         <Label htmlFor="favorite-filter">Mostrar Solo Favoritas</Label>

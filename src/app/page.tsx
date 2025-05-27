@@ -24,10 +24,10 @@ export default function HomePage() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [currentFilters, setCurrentFilters] = useState<{ searchTerm?: string; isFavorite?: boolean }>({});
+  const [currentFilters, setCurrentFilters] = useState<{ searchTerm?: string; isFavorite?: true | undefined }>({});
   const [isClearHistoryDialogOpen, setIsClearHistoryDialogOpen] = useState(false);
 
-  const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: boolean } = currentFilters) => {
+  const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters) => {
     setIsLoading(true);
     try {
       const fetchedImages = await filterImages(filters);
@@ -38,11 +38,12 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, currentFilters]); // Add currentFilters to dependencies if it's used directly inside
+  }, [toast, currentFilters]); 
 
   useEffect(() => {
-    loadImages();
-  }, [loadImages]); // Correct dependency array for useEffect
+    // Load images with initial (empty) filters, which means isFavorite will be undefined
+    loadImages(currentFilters);
+  }, [loadImages]); // loadImages depends on currentFilters, so this is fine
 
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
@@ -60,7 +61,11 @@ export default function HomePage() {
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
-      // loadImages(); // Or reload to ensure consistency if complex logic is involved
+      // If current filter is active (e.g., "show only favorites"), reloading might be better
+      // to ensure the list correctly reflects the change based on the filter.
+      if (currentFilters.isFavorite !== undefined) {
+         loadImages();
+      }
     } catch (error) {
       toast({ title: "Error", description: "No se pudo actualizar el estado de favorito.", variant: "destructive" });
     }
@@ -83,13 +88,13 @@ export default function HomePage() {
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
-      // loadImages();
+      // loadImages(); // Consider if a reload is needed if tags affect current filtering
     } catch (error) {
       toast({ title: "Error", description: "No se pudieron actualizar las etiquetas.", variant: "destructive" });
     }
   };
 
-  const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: boolean }) => {
+  const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
     loadImages(filters);
   };
