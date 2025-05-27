@@ -6,22 +6,28 @@ export interface GeneratedImage {
   tags: string[];
   collections?: string[]; // AI-suggested tags, called "colecciones"
   modelUsed: string;
-  isFavorite: boolean; // Stored as 0 or 1 in IndexedDB for easier indexing if needed, but boolean here is fine.
+  isFavorite: boolean; 
   createdAt: Date;
   updatedAt: Date;
   width?: number;
   height?: number;
-  originalUrl?: string; // If fetched from a URL before converting to Blob
+  originalUrl?: string; 
   artisticStyle?: string;
-  aspectRatio?: string; // e.g., "1:1", "16:9"
-  imageQuality?: string; // e.g., "draft", "standard", "high"
+  aspectRatio?: string; 
+  imageQuality?: string; 
+}
+
+export interface ExportedGeneratedImage extends Omit<GeneratedImage, 'imageData' | 'createdAt' | 'updatedAt'> {
+  imageData: string; // Base64 data URI
+  createdAt: string; // ISO string date
+  updatedAt: string; // ISO string date
 }
 
 // For future use with simulated login
 export interface SimulatedUser {
   id: string;
   username: string;
-  password?: string; // In a real app, never store plain passwords
+  password?: string; 
   role: 'admin' | 'normal';
 }
 
@@ -32,5 +38,4 @@ export interface AiModel {
   isCustom: boolean;
   enabled: boolean;
   apiKey?: string; // Simulated
-  // Add other model-specific properties if needed
 }

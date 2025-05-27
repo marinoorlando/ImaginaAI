@@ -16,18 +16,20 @@ import { useToast } from "@/hooks/use-toast";
 
 interface AppHeaderProps {
   onClearHistory: () => void;
+  onExportHistory: () => void;
+  onImportHistory: () => void;
 }
 
-export function AppHeader({ onClearHistory }: AppHeaderProps) {
+export function AppHeader({ onClearHistory, onExportHistory, onImportHistory }: AppHeaderProps) {
   const { toast } = useToast();
   // Mock admin state - in a real app, this would come from an auth context
   const [isAdmin, setIsAdmin] = React.useState(true); 
   const [isLoggedIn, setIsLoggedIn] = React.useState(true);
 
-  const handleNotImplemented = () => {
+  const handleNotImplemented = (featureName?: string) => {
     toast({
       title: "Función no implementada",
-      description: "Esta característica estará disponible pronto.",
+      description: featureName ? `${featureName} estará disponible pronto.` : "Esta característica estará disponible pronto.",
     });
   };
 
@@ -43,7 +45,7 @@ export function AppHeader({ onClearHistory }: AppHeaderProps) {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <h1 className="text-xl font-bold text-primary">Imagina AI HR</h1>
         <nav className="flex items-center space-x-2 md:space-x-4">
-          <Button variant="ghost" size="sm" onClick={handleNotImplemented}>
+          <Button variant="ghost" size="sm" onClick={() => handleNotImplemented("Estadísticas")}>
             <BarChart2 className="h-4 w-4 mr-2" />
             Estadísticas
           </Button>
@@ -58,11 +60,11 @@ export function AppHeader({ onClearHistory }: AppHeaderProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones del Historial</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleNotImplemented}>
+              <DropdownMenuItem onClick={onExportHistory}>
                 <Download className="h-4 w-4 mr-2" />
                 Exportar Historial
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleNotImplemented}>
+              <DropdownMenuItem onClick={onImportHistory}>
                 <Upload className="h-4 w-4 mr-2" />
                 Importar Historial
               </DropdownMenuItem>
@@ -75,7 +77,7 @@ export function AppHeader({ onClearHistory }: AppHeaderProps) {
           </DropdownMenu>
 
           {isAdmin && (
-            <Button variant="ghost" size="icon" onClick={handleNotImplemented} aria-label="Configuración">
+            <Button variant="ghost" size="icon" onClick={() => handleNotImplemented("Configuración")} aria-label="Configuración">
               <Settings className="h-5 w-5" />
             </Button>
           )}

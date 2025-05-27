@@ -1,14 +1,15 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppHeader } from '@/components/AppHeader';
 import { GenerationForm } from '@/components/GenerationForm';
 import { ImageGrid } from '@/components/ImageGrid';
 import { FilterControls } from '@/components/FilterControls';
-import type { GeneratedImage } from '@/lib/types';
+import type { GeneratedImage, ExportedGeneratedImage } from '@/lib/types';
 import { db, addGeneratedImage, getAllGeneratedImages, toggleFavoriteStatus, deleteGeneratedImage, updateGeneratedImage, filterImages, clearAllImages } from '@/lib/db';
 import { useToast } from "@/hooks/use-toast";
+import { blobToDataURI, dataURIToBlob } from '@/lib/fileUtils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const [currentFilters, setCurrentFilters] = useState<{ searchTerm?: string; isFavorite?: true | undefined }>({});
   const [isClearHistoryDialogOpen, setIsClearHistoryDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters) => {
     setIsLoading(true);
@@ -50,6 +52,7 @@ export default function HomePage() {
       loadImages(); 
       toast({ title: "Imagen Guardada", description: "La nueva imagen se ha guardado en el historial." });
     } catch (error) {
+      console.error("Error saving new image:", error);
       toast({ title: "Error", description: "No se pudo guardar la nueva imagen.", variant: "destructive" });
     }
   };
@@ -96,10 +99,7 @@ export default function HomePage() {
         img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
       )
     );
-    console.log(`[HomePage] Images state updated for imageId: ${id}. Current images state:`, images);
   };
-
-  // Removed handleImageRegenerated as ImageCard now calls handleImageGenerated for new images.
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
@@ -121,10 +121,124 @@ export default function HomePage() {
     }
   };
 
+  const handleExportHistory = async () => {
+    try {
+      setIsLoading(true);
+      toast({ title: "Exportando...", description: "Preparando el historial para la descarga." });
+      const allImages = await getAllGeneratedImages();
+      if (allImages.length === 0) {
+        toast({ title: "Historial Vacío", description: "No hay imágenes para exportar." });
+        return;
+      }
+
+      const exportedImages: ExportedGeneratedImage[] = await Promise.all(
+        allImages.map(async (img) => ({
+          ...img,
+          imageData: await blobToDataURI(img.imageData),
+          createdAt: img.createdAt.toISOString(),
+          updatedAt: img.updatedAt.toISOString(),
+        }))
+      );
+      
+      const jsonString = JSON.stringify(exportedImages, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `imagina_ai_hr_historial_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Historial Exportado", description: "El archivo JSON ha sido descargado." });
+    } catch (error) {
+      console.error("Error exporting history:", error);
+      toast({ title: "Error de Exportación", description: "No se pudo exportar el historial.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportHistory = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsLoading(true);
+      toast({ title: "Importando...", description: "Procesando el archivo de historial." });
+      const fileContent = await file.text();
+      const importedData: any[] = JSON.parse(fileContent);
+
+      if (!Array.isArray(importedData)) {
+        throw new Error("El archivo de importación no tiene el formato esperado (debe ser un array).");
+      }
+      
+      let importedCount = 0;
+      let skippedCount = 0;
+
+      for (const item of importedData) {
+        // Basic validation of item structure
+        if (typeof item.id !== 'string' || typeof item.prompt !== 'string' || typeof item.imageData !== 'string') {
+            console.warn("Skipping invalid item during import:", item);
+            skippedCount++;
+            continue;
+        }
+        try {
+            const imageBlob = await dataURIToBlob(item.imageData);
+            const newImage: GeneratedImage = {
+              id: item.id,
+              prompt: item.prompt,
+              imageData: imageBlob,
+              tags: Array.isArray(item.tags) ? item.tags : [],
+              collections: Array.isArray(item.collections) ? item.collections : [],
+              modelUsed: typeof item.modelUsed === 'string' ? item.modelUsed : 'Desconocido',
+              isFavorite: typeof item.isFavorite === 'boolean' ? item.isFavorite : false,
+              createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
+              updatedAt: item.updatedAt ? new Date(item.updatedAt) : new Date(),
+              artisticStyle: typeof item.artisticStyle === 'string' ? item.artisticStyle : undefined,
+              aspectRatio: typeof item.aspectRatio === 'string' ? item.aspectRatio : undefined,
+              imageQuality: typeof item.imageQuality === 'string' ? item.imageQuality : undefined,
+              width: typeof item.width === 'number' ? item.width : undefined,
+              height: typeof item.height === 'number' ? item.height : undefined,
+            };
+            await addGeneratedImage(newImage);
+            importedCount++;
+        } catch (addError) {
+            console.error(`Error adding imported image ${item.id}:`, addError);
+            skippedCount++;
+        }
+      }
+      
+      loadImages(); // Refresh the grid
+      toast({ 
+        title: "Importación Completada", 
+        description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas por error o formato.` : ''}` 
+      });
+
+    } catch (error) {
+      console.error("Error importing history:", error);
+      const message = error instanceof Error ? error.message : "No se pudo importar el historial.";
+      toast({ title: "Error de Importación", description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+      // Reset file input to allow importing the same file again if needed
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AppHeader onClearHistory={openClearHistoryDialog} />
+      <AppHeader 
+        onClearHistory={openClearHistoryDialog}
+        onExportHistory={handleExportHistory}
+        onImportHistory={handleImportHistory}
+      />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
@@ -139,7 +253,7 @@ export default function HomePage() {
               onDeleteImage={handleDeleteImage}
               onUpdateTags={handleUpdateTags}
               onCollectionsUpdated={handleCollectionsUpdated}
-              onImageGenerated={handleImageGenerated} // Pass handleImageGenerated for new images from regeneration
+              onImageGenerated={handleImageGenerated}
               isLoading={isLoading}
             />
           </div>
@@ -166,6 +280,13 @@ export default function HomePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={handleFileImport}
+      />
     </div>
   );
 }
