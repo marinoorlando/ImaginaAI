@@ -5,8 +5,8 @@ import { suggestTags as suggestTagsFlow, type SuggestTagsInput } from "@/ai/flow
 import { generateImage as generateImageWithGenkitFlow, type GenerateImageInput as GenkitImageInput } from "@/ai/flows/generate-image-flow";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
-import { updateGeneratedImage } from "@/lib/db"; // Import updateGeneratedImage
-
+// Removed: import { updateGeneratedImage } from "@/lib/db"; 
+// updateGeneratedImage will be called from the client side after this action returns.
 
 const GenerateImageServerInputSchema = z.object({
   prompt: z.string().min(1, "El prompt es requerido."),
@@ -67,7 +67,7 @@ export async function generateImageAction(values: z.infer<typeof GenerateImageSe
 
 
 const SuggestTagsServerInputSchema = z.object({
-  imageId: z.string().min(1, "El ID de la imagen es requerido."),
+  // imageId is no longer needed here as DB update happens on client
   prompt: z.string().min(1, "El prompt es requerido para sugerir etiquetas."),
 });
 
@@ -75,11 +75,11 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
   const validation = SuggestTagsServerInputSchema.safeParse(values);
   if (!validation.success) {
     console.error("[suggestTagsAction] Input validation failed:", validation.error.flatten());
-    return { error: "Entrada inválida.", details: validation.error.flatten() };
+    return { error: "Entrada inválida.", details: validation.error.flatten(), suggestedCollections: [] };
   }
   
-  const { imageId, prompt: imagePrompt } = validation.data;
-  console.log("[suggestTagsAction] Received values:", values);
+  const { prompt: imagePrompt } = validation.data; // imageId removed
+  console.log("[suggestTagsAction] Received values for AI suggestion:", values);
 
   try {
     const genkitInput: SuggestTagsInput = { prompt: imagePrompt };
@@ -87,22 +87,13 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     const result = await suggestTagsFlow(genkitInput); 
     console.log("[suggestTagsAction] Result from suggestTagsFlow:", result);
 
-    // `result.tags` will be an array, possibly empty, if suggestTagsFlow is successful
-    // If suggestTagsFlow throws an error, this part won't be reached.
-    const collectionsToUpdate = result.tags || []; // Ensure it's always an array
+    const collectionsToSuggest = result.tags || [];
 
-    console.log(`[suggestTagsAction] Collections from AI for imageId ${imageId}:`, collectionsToUpdate);
+    console.log(`[suggestTagsAction] Collections suggested by AI:`, collectionsToSuggest);
     
-    try {
-      console.log(`[suggestTagsAction] Attempting to update DB for imageId: ${imageId} with collections:`, collectionsToUpdate);
-      await updateGeneratedImage(imageId, { collections: collectionsToUpdate });
-      console.log(`[suggestTagsAction] Successfully updated DB for imageId: ${imageId}`);
-      return { success: true, suggestedCollections: collectionsToUpdate };
-    } catch (dbError) {
-      console.error(`[suggestTagsAction] Error updating DB for imageId: ${imageId}`, dbError);
-      const dbErrorMessage = dbError instanceof Error ? dbError.message : "Error al guardar las colecciones en la base de datos.";
-      return { error: `Error de base de datos: ${dbErrorMessage}`, suggestedCollections: [] }; // Return empty if DB fails
-    }
+    // The database update will now happen on the client side.
+    // This Server Action's only job is to get the suggestions.
+    return { success: true, suggestedCollections: collectionsToSuggest };
 
   } catch (error) { // Catch errors from suggestTagsFlow (AI suggestion part)
     console.error("[suggestTagsAction] Error in suggestTagsFlow execution:", error);
@@ -110,4 +101,3 @@ export async function suggestTagsAction(values: z.infer<typeof SuggestTagsServer
     return { error: errorMessage, suggestedCollections: [] };
   }
 }
-

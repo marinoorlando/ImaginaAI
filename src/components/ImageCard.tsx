@@ -10,6 +10,7 @@ import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction } from '@/actions/imageActions';
+import { updateGeneratedImage } from '@/lib/db'; // Import for client-side DB update
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,28 +79,38 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
     console.log(`[ImageCard] handleSuggestCollections called for imageId: ${image.id}, prompt: ${image.prompt}`);
     setIsSuggestingTags(true);
     try {
-      const result = await suggestTagsAction({ imageId: image.id, prompt: image.prompt });
+      // Call Server Action to get suggestions
+      const result = await suggestTagsAction({ prompt: image.prompt }); // No imageId needed for the action itself
       console.log(`[ImageCard] Result from suggestTagsAction for imageId ${image.id}:`, result);
 
       if (result.success && result.suggestedCollections) {
-        console.log(`[ImageCard] Calling onCollectionsUpdated for imageId ${image.id} with collections:`, result.suggestedCollections);
-        onCollectionsUpdated(image.id, result.suggestedCollections); 
-        if (result.suggestedCollections.length > 0) {
-            toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
-        } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones existentes (si las hay) se han borrado." });
+        try {
+          // Update DB on the client side
+          await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
+          console.log(`[ImageCard] Successfully updated DB for imageId: ${image.id} with collections:`, result.suggestedCollections);
+          
+          // Update local React state via prop
+          onCollectionsUpdated(image.id, result.suggestedCollections); 
+          
+          if (result.suggestedCollections.length > 0) {
+              toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
+          } else {
+              toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones. Las colecciones se han actualizado (posiblemente borrado si antes existían)." });
+          }
+        } catch (dbError) {
+            console.error(`[ImageCard] Error updating DB for imageId ${image.id}:`, dbError);
+            const dbErrorMessage = dbError instanceof Error ? dbError.message : "Error al guardar las colecciones en la base de datos.";
+            toast({ title: "Error de Base de Datos", description: dbErrorMessage, variant: "destructive" });
         }
       } else {
-        // This 'else' handles cases where result.success is false or suggestedCollections is missing,
-        // or if result.error is present.
         console.error(`[ImageCard] Error or no suggested collections from suggestTagsAction for imageId ${image.id}:`, result.error);
         toast({ 
             title: "Error al Sugerir Colecciones", 
-            description: result.error || "No se pudieron obtener sugerencias o guardarlas en la base de datos.", 
+            description: result.error || "No se pudieron obtener sugerencias de la IA.", 
             variant: "destructive" 
         });
       }
-    } catch (error) { // Catch unexpected errors during the action call itself
+    } catch (error) { 
       console.error(`[ImageCard] Catch block error in handleSuggestCollections for imageId ${image.id}:`, error);
       toast({ 
           title: "Error Inesperado", 
@@ -257,4 +268,3 @@ export function ImageCard({ image, onToggleFavorite, onDelete, onUpdateTags, onC
     </TooltipProvider>
   );
 }
-
