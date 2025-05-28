@@ -80,11 +80,15 @@ export function ImageDetailsDialog({
   const [isFavoriteSwitch, setIsFavoriteSwitch] = useState(image?.isFavorite || false);
 
   useEffect(() => {
+    let objectUrl: string | null = null;
+
     if (image) {
+      console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image))); // Log a deep copy for better inspection
+      console.log('[ImageDetailsDialog] Image tags:', image.tags);
+
       if (image.imageData instanceof Blob) {
-        const url = URL.createObjectURL(image.imageData);
-        setImageUrl(url);
-        return () => URL.revokeObjectURL(url);
+        objectUrl = URL.createObjectURL(image.imageData);
+        setImageUrl(objectUrl);
       } else {
         setImageUrl(null);
       }
@@ -95,6 +99,12 @@ export function ImageDetailsDialog({
       setEditableTags([]);
       setIsFavoriteSwitch(false);
     }
+
+    return () => {
+      if (objectUrl) { // Revoke the specific objectUrl created in this effect run
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [image]);
 
 
@@ -228,38 +238,41 @@ export function ImageDetailsDialog({
 
               <div>
                 <Label htmlFor="tags-input-dialog" className="text-sm font-medium mb-1 block">Etiquetas Manuales</Label>
-                <div className="flex items-center space-x-2">
-                    <Tag className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                        id="tags-input-dialog"
-                        type="text"
-                        placeholder="Añadir etiqueta..."
-                        value={tagInput}
-                        onChange={handleTagInputChange}
-                        onKeyDown={handleTagInputKeyDown}
-                        className="h-8 text-sm flex-grow"
-                    />
-                    <Button variant="outline" size="sm" onClick={handleAddTag} className="h-8">Añadir</Button>
-                </div>
-                {editableTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {editableTags.map(tag => (
-                      <Badge key={tag} variant="secondary" className="text-xs flex items-center">
-                        {tag}
-                        <button type="button" onClick={() => removeTag(tag)} className="ml-1 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </Badge>
-                    ))}
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                      <Tag className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                          id="tags-input-dialog"
+                          type="text"
+                          placeholder="Añadir etiqueta..."
+                          value={tagInput}
+                          onChange={handleTagInputChange}
+                          onKeyDown={handleTagInputKeyDown}
+                          className="h-8 text-sm flex-grow"
+                      />
+                      <Button variant="outline" size="sm" onClick={handleAddTag} className="h-8">Añadir</Button>
                   </div>
-                )}
-                {hasTagsChanged() && (
-                   <Button size="sm" onClick={handleSaveTags} disabled={isSavingTags} className="mt-3 text-xs h-8">
-                    {isSavingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                    Guardar Etiquetas
-                  </Button>
-                )}
+                  {editableTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {editableTags.map(tag => (
+                        <Badge key={tag} variant="secondary" className="text-xs flex items-center">
+                          {tag}
+                          <button type="button" onClick={() => removeTag(tag)} className="ml-1 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {hasTagsChanged() && (
+                     <Button size="sm" onClick={handleSaveTags} disabled={isSavingTags} className="mt-2 text-xs h-8">
+                      {isSavingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                      Guardar Etiquetas
+                    </Button>
+                  )}
+                </div>
               </div>
+              
 
               <div>
                 <Label className="text-sm font-medium mb-1 block">Colecciones (IA)</Label>
@@ -308,3 +321,6 @@ export function ImageDetailsDialog({
     </Dialog>
   );
 }
+
+
+    
