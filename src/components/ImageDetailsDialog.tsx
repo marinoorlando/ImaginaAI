@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image'; // Renamed to avoid conflict with HTMLImageElement
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { GeneratedImage } from '@/lib/types';
-import { X, Tag, Heart, Save, Loader2, Copy } from 'lucide-react';
+import { X, Tag, Heart, Save, Loader2, Copy, IterationCcwIcon } from 'lucide-react'; // Using IterationCcwIcon for resize
 import { useToast } from '@/hooks/use-toast';
 
 interface ImageDetailsDialogProps {
@@ -27,6 +27,7 @@ interface ImageDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
   onUpdateTags: (id: string, newTags: string[]) => Promise<void>;
   onToggleFavorite: (id: string) => Promise<void>;
+  onImageResized: (id: string, newBlob: Blob, width: number, height: number) => Promise<void>;
 }
 
 const artisticStylesList = [
@@ -71,6 +72,7 @@ export function ImageDetailsDialog({
   onOpenChange,
   onUpdateTags,
   onToggleFavorite,
+  onImageResized,
 }: ImageDetailsDialogProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -79,10 +81,15 @@ export function ImageDetailsDialog({
   const [isSavingTags, setIsSavingTags] = useState(false);
   const [isFavoriteSwitch, setIsFavoriteSwitch] = useState(image?.isFavorite || false);
 
+  const [newWidth, setNewWidth] = useState<number>(0);
+  const [newHeight, setNewHeight] = useState<number>(0);
+  const [originalAspectRatio, setOriginalAspectRatio] = useState<number>(1);
+  const [isResizing, setIsResizing] = useState(false);
+
   useEffect(() => {
     let objectUrl: string | null = null;
 
-    if (image) {
+    if (image && open) { // Added 'open' condition to re-init when dialog opens with a new image
       console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image, (key, value) => key === 'imageData' ? 'Blob omitted' : value)));
       console.log('[ImageDetailsDialog] Image tags:', image.tags);
 
@@ -94,18 +101,38 @@ export function ImageDetailsDialog({
       }
       setEditableTags(image.tags ? [...image.tags] : []);
       setIsFavoriteSwitch(image.isFavorite);
-    } else {
-      setImageUrl(null);
-      setEditableTags([]);
-      setIsFavoriteSwitch(false);
+      
+      if (image.width && image.height) {
+        setNewWidth(image.width);
+        setNewHeight(image.height);
+        if (image.height !== 0) {
+          setOriginalAspectRatio(image.width / image.height);
+        } else {
+          setOriginalAspectRatio(1); // Avoid division by zero
+        }
+      } else {
+        setNewWidth(300); 
+        setNewHeight(300);
+        setOriginalAspectRatio(1);
+      }
+    } else if (!open) {
+        // Reset states when dialog is closed
+        setImageUrl(null);
+        setEditableTags([]);
+        setIsFavoriteSwitch(false);
+        setNewWidth(0);
+        setNewHeight(0);
+        setOriginalAspectRatio(1);
+        setTagInput('');
     }
+
 
     return () => {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [image]);
+  }, [image, open]);
 
 
   if (!image) return null;
@@ -154,7 +181,7 @@ export function ImageDetailsDialog({
       await onToggleFavorite(image.id);
       toast({ title: "Favorito Actualizado" });
     } catch (error) {
-      setIsFavoriteSwitch(!checked);
+      setIsFavoriteSwitch(!checked); // Revert on error
       toast({ title: "Error al Actualizar Favorito", variant: "destructive" });
     }
   };
@@ -195,6 +222,90 @@ export function ImageDetailsDialog({
   const showSaveButton = hasTagsChanged();
   console.log("[Render Save Button?] hasTagsChanged() is:", showSaveButton);
 
+  const handleWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const widthValue = parseInt(e.target.value, 10);
+    if (!isNaN(widthValue) && widthValue > 0) {
+      setNewWidth(widthValue);
+      if (originalAspectRatio !== 0 && originalAspectRatio) { // Check for valid originalAspectRatio
+        setNewHeight(Math.round(widthValue / originalAspectRatio));
+      } else if (image?.width && image?.height && image.height !== 0) { // Recalculate if needed
+        const currentRatio = image.width / image.height;
+        setNewHeight(Math.round(widthValue / currentRatio));
+      }
+    } else if (e.target.value === '') {
+      setNewWidth(0); // Allow clearing for typing
+    }
+  };
+
+  const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heightValue = parseInt(e.target.value, 10);
+    if (!isNaN(heightValue) && heightValue > 0) {
+      setNewHeight(heightValue);
+       if (originalAspectRatio !== 0 && originalAspectRatio) {
+        setNewWidth(Math.round(heightValue * originalAspectRatio));
+      } else if (image?.width && image?.height && image.height !== 0) {
+        const currentRatio = image.width / image.height;
+        setNewWidth(Math.round(heightValue * currentRatio));
+      }
+    } else if (e.target.value === '') {
+      setNewHeight(0); // Allow clearing for typing
+    }
+  };
+
+  const handleResizeImage = async () => {
+    if (!image || !image.imageData || !(image.imageData instanceof Blob) || newWidth <= 0 || newHeight <= 0) {
+      toast({ title: "Error de Redimensión", description: "Datos de imagen inválidos o dimensiones no válidas.", variant: "destructive" });
+      return;
+    }
+    setIsResizing(true);
+    try {
+      const imgElement = document.createElement('img');
+      const objectURL = URL.createObjectURL(image.imageData);
+
+      imgElement.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(objectURL); // Clean up
+          toast({ title: "Error de Redimensión", description: "No se pudo obtener el contexto 2D del canvas.", variant: "destructive" });
+          setIsResizing(false);
+          return;
+        }
+        ctx.drawImage(imgElement, 0, 0, newWidth, newHeight);
+        URL.revokeObjectURL(objectURL); // Clean up
+
+        canvas.toBlob(async (newBlob) => {
+          if (newBlob) {
+            await onImageResized(image.id, newBlob, newWidth, newHeight);
+            toast({ title: "Imagen Redimensionada", description: `Nuevas dimensiones: ${newWidth}x${newHeight}px.` });
+            // The parent (HomePage) will reload data which re-initializes this dialog if it stays open.
+            // Or, if it closes on resize, it will have fresh data on re-open.
+            // To see immediate change in *this* dialog's preview, update imageUrl:
+            // const newObjectUrl = URL.createObjectURL(newBlob);
+            // setImageUrl(newObjectUrl); // Be careful to revoke this newObjectUrl on unmount/change.
+          } else {
+            toast({ title: "Error de Redimensión", description: "No se pudo convertir el canvas a Blob.", variant: "destructive" });
+          }
+          setIsResizing(false);
+        }, image.imageData.type || 'image/png', 0.92); // Specify type and quality (0.92 for PNG is good)
+      };
+      imgElement.onerror = () => {
+        URL.revokeObjectURL(objectURL); // Clean up
+        toast({ title: "Error de Redimensión", description: "No se pudo cargar la imagen original para redimensionar.", variant: "destructive" });
+        setIsResizing(false);
+      };
+      imgElement.src = objectURL;
+
+    } catch (error) {
+      console.error("Error resizing image:", error);
+      toast({ title: "Error de Redimensión", description: error instanceof Error ? error.message : "Ocurrió un problema.", variant: "destructive" });
+      setIsResizing(false);
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
@@ -210,7 +321,7 @@ export function ImageDetailsDialog({
             <div className="space-y-3">
               <div className="aspect-square w-full relative bg-muted rounded-md overflow-hidden shadow">
                 {imageUrl ? (
-                  <Image src={imageUrl} alt={image.prompt} layout="fill" objectFit="contain" />
+                  <NextImage src={imageUrl} alt={image.prompt} layout="fill" objectFit="contain" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                     <span>Sin previsualización</span>
@@ -224,6 +335,40 @@ export function ImageDetailsDialog({
                 {image.width && image.height && (
                   <p><strong>Dimensiones:</strong> {image.width} x {image.height} px</p>
                 )}
+              </div>
+               {/* Resize Section */}
+              <div className="pt-4 border-t mt-4">
+                <Label className="text-sm font-medium mb-2 block">Redimensionar Imagen (mantener aspecto)</Label>
+                <div className="grid grid-cols-2 gap-2 items-center mb-2">
+                  <div>
+                    <Label htmlFor="newWidth" className="text-xs">Ancho (px)</Label>
+                    <Input
+                      id="newWidth"
+                      type="number"
+                      value={newWidth || ''}
+                      onChange={handleWidthChange}
+                      className="h-8 text-sm"
+                      disabled={isResizing}
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="newHeight" className="text-xs">Alto (px)</Label>
+                    <Input
+                      id="newHeight"
+                      type="number"
+                      value={newHeight || ''}
+                      onChange={handleHeightChange}
+                      className="h-8 text-sm"
+                      disabled={isResizing}
+                      min="1"
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleResizeImage} disabled={isResizing || newWidth <= 0 || newHeight <= 0} className="w-full h-9 text-sm">
+                  {isResizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <IterationCcwIcon className="mr-2 h-4 w-4" />}
+                  Redimensionar Imagen
+                </Button>
               </div>
             </div>
 
@@ -249,10 +394,10 @@ export function ImageDetailsDialog({
                   </ScrollArea>
                 </div>
               )}
-
+              
               <div className="space-y-2">
                 <Label htmlFor="tags-input-dialog" className="text-sm font-medium mb-1 block">Etiquetas Manuales</Label>
-                <div className="flex items-center space-x-2">
+                 <div className="flex items-center space-x-2">
                     <Tag className="h-4 w-4 text-muted-foreground" />
                     <Input
                         id="tags-input-dialog"

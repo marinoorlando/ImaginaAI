@@ -7,7 +7,7 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(8).stores({ // Incremented version to 8 for width and height
+    this.version(8).stores({ // Version 8 for width and height
       generatedImages: 'id, prompt, *tags, *collections, suggestedPrompt, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality, width, height',
     });
   }
@@ -62,7 +62,8 @@ export async function getGeneratedImageById(id: string): Promise<GeneratedImage 
   }
 }
 
-export async function updateGeneratedImage(id: string, changes: Partial<Omit<GeneratedImage, 'id' | 'imageData'>>): Promise<number> {
+// Modified to accept imageData for resizing
+export async function updateGeneratedImage(id: string, changes: Partial<Omit<GeneratedImage, 'id'>>): Promise<number> {
   try {
     return await db.generatedImages.update(id, { ...changes, updatedAt: new Date() });
   } catch (error) {

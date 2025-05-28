@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image'; // Renamed to avoid conflict with HTMLImageElement
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,8 @@ import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions';
-import { updateGeneratedImage } from '@/lib/db';
-import { v4 as uuidv4 } from 'uuid';
+import { updateGeneratedImage } from '@/lib/db'; // Used directly for client-side DB ops
+// import { v4 as uuidv4 } from 'uuid'; // Not needed here if IDs come from server/db
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +37,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ImageDetailsDialog } from './ImageDetailsDialog';
+import { ImageDetailsDialog } from './ImageDetailsDialog'; // Ensure this is correctly imported/created
 
 interface ImageCardProps {
   image: GeneratedImage;
@@ -45,7 +45,8 @@ interface ImageCardProps {
   onDelete: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => Promise<void>;
   onImageMetaUpdated: (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => void;
-  onImageGenerated: (image: GeneratedImage) => void;
+  onImageGenerated: (image: GeneratedImage) => void; // For creating a new image (e.g., regeneration)
+  onImageResized: (id: string, newBlob: Blob, width: number, height: number) => Promise<void>; // New prop
 }
 
 export function ImageCard({
@@ -54,7 +55,8 @@ export function ImageCard({
   onDelete,
   onUpdateTags,
   onImageMetaUpdated,
-  onImageGenerated
+  onImageGenerated,
+  onImageResized, // New prop
 }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function ImageCard({
     } else {
       console.warn(`Image data for ${image.id} is not a Blob:`, image.imageData);
       setIsLoadingImageUrl(false);
-      setImageUrl(null);
+      setImageUrl(null); // Handle cases where imageData might not be a Blob
     }
     return () => {
       if (objectUrl) {
@@ -84,7 +86,7 @@ export function ImageCard({
 
   const getImageDimensions = (blob: Blob): Promise<{width: number, height: number}> => {
     return new Promise((resolve, reject) => {
-      const img = document.createElement('img');
+      const img = document.createElement('img'); // Use HTMLImageElement, not NextImage here
       const objectUrl = URL.createObjectURL(blob);
       img.onload = () => {
         resolve({ width: img.naturalWidth, height: img.naturalHeight });
@@ -102,7 +104,8 @@ export function ImageCard({
     if (imageUrl && image.imageData instanceof Blob) {
       const link = document.createElement('a');
       link.href = imageUrl;
-      link.download = `imagina-ai-${image.id.substring(0,8)}.${image.imageData.type.split('/')[1] || 'png'}`;
+      const extension = image.imageData.type.split('/')[1] || 'png';
+      link.download = `imagina-ai-${image.id.substring(0,8)}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -138,21 +141,17 @@ export function ImageCard({
         if (result.suggestedCollections) {
             updates.collections = result.suggestedCollections;
             if (result.suggestedCollections.length > 0) hasNewSuggestions = true;
-            console.log(`[ImageCard]Collections to update for ${image.id}:`, result.suggestedCollections);
         }
         if (result.suggestedPrompt) {
             updates.suggestedPrompt = result.suggestedPrompt;
             hasNewSuggestions = true;
-            console.log(`[ImageCard]Suggested prompt to update for ${image.id}:`, result.suggestedPrompt);
         }
 
         if (Object.keys(updates).length > 0) {
-          console.log(`[ImageCard] Calling updateGeneratedImage for ${image.id} with updates:`, updates);
           await updateGeneratedImage(image.id, updates); // Update DB from client-side
           onImageMetaUpdated(image.id, updates); // Update local state
-          console.log(`[ImageCard] DB and local state updated for ${image.id}`);
         }
-
+        
         let toastMessage = "Sugerencias procesadas.";
         if (result.suggestedCollections && result.suggestedCollections.length > 0 && result.suggestedPrompt) {
             toastMessage = "Nuevas colecciones y prompt sugerido por IA guardados.";
@@ -164,27 +163,18 @@ export function ImageCard({
              toastMessage = "La IA no generó nuevas sugerencias o las existentes ya son las mejores.";
         }
         toast({ title: "Sugerencias de IA", description: toastMessage });
-
       } else {
-        toast({
-            title: "Respuesta Inesperada",
-            description: "No se pudieron obtener sugerencias de la IA o hubo un problema al guardarlas.",
-            variant: "destructive"
-        });
+         toast({ title: "Respuesta Inesperada", description: "No se pudieron obtener sugerencias de la IA.", variant: "destructive" });
       }
     } catch (error) {
       console.error(`[ImageCard] Catch block error in handleSuggestMeta for imageId ${image.id}:`, error);
       const errorMessage = error instanceof Error ? error.message : "Ocurrió un problema al procesar la solicitud de sugerencias.";
-      toast({
-          title: "Error Inesperado",
-          description: errorMessage,
-          variant: "destructive"
-      });
+      toast({ title: "Error Inesperado", description: errorMessage, variant: "destructive" });
     } finally {
       setIsSuggesting(false);
     }
   };
-
+  
   const handleRegenerate = async () => {
     setIsRegenerating(true);
     toast({ title: "Generando nueva imagen...", description: "Usando el prompt original. Por favor espera." });
@@ -214,24 +204,23 @@ export function ImageCard({
         }
 
         const newImageEntry: GeneratedImage = {
-          id: result.id,
+          id: result.id, // New ID from server action
           imageData: newImageBlob,
-          prompt: result.prompt,
+          prompt: result.prompt, // This will be the original prompt
           artisticStyle: result.artisticStyle || 'none',
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags || [], // Tags from action (should include initialTags)
-          collections: result.collections || [],
-          suggestedPrompt: result.suggestedPrompt || undefined,
+          tags: result.tags || [], // These are the inherited manual tags
+          collections: result.collections || [], // New AI collections for this new image
+          suggestedPrompt: result.suggestedPrompt || undefined, // New suggested prompt for this new image
           modelUsed: result.modelUsed || 'Desconocido',
-          isFavorite: false,
+          isFavorite: false, // New images are not favorite by default
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
           width: dimensions.width,
           height: dimensions.height,
         };
-
-        onImageGenerated(newImageEntry);
+        onImageGenerated(newImageEntry); // Call prop to add as new image
         toast({ title: "Nueva Imagen Generada", description: "La nueva imagen (desde prompt original) ha sido añadida al historial." });
       } else {
         throw new Error("La generación falló o no devolvió los datos necesarios.");
@@ -253,10 +242,10 @@ export function ImageCard({
     toast({ title: "Generando nueva imagen...", description: "Usando el prompt sugerido por IA. Por favor espera." });
     try {
       const result = await generateImageAction({
-        prompt: image.suggestedPrompt,
-        artisticStyle: image.artisticStyle || 'none', // Use original image's style
-        aspectRatio: image.aspectRatio || '1:1',     // Use original image's aspect ratio
-        imageQuality: image.imageQuality || 'standard', // Use original image's quality
+        prompt: image.suggestedPrompt, // Use the suggested prompt
+        artisticStyle: image.artisticStyle || 'none',
+        aspectRatio: image.aspectRatio || '1:1',
+        imageQuality: image.imageQuality || 'standard',
         initialTags: image.tags, // Inherit manual tags from original
       });
 
@@ -275,16 +264,16 @@ export function ImageCard({
         } catch (dimError) {
             console.warn("Could not determine image dimensions for regenerated image (suggested prompt):", dimError);
         }
-
+        
         const newImageEntry: GeneratedImage = {
-          id: result.id,
+          id: result.id, // New ID from server action
           imageData: newImageBlob,
-          prompt: result.prompt, // This will be the suggested prompt
+          prompt: result.prompt, // This will be the suggested prompt used
           artisticStyle: result.artisticStyle || 'none',
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags || [], // Tags from action (should include initialTags)
-          collections: result.collections || [], // New AI collections for this new image
+          tags: result.tags || [], // Inherited manual tags
+          collections: result.collections || [], // New AI collections
           suggestedPrompt: result.suggestedPrompt || undefined, // New suggested prompt for this new image
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
@@ -293,8 +282,7 @@ export function ImageCard({
           width: dimensions.width,
           height: dimensions.height,
         };
-
-        onImageGenerated(newImageEntry);
+        onImageGenerated(newImageEntry); // Add as new image
         toast({ title: "Nueva Imagen Generada", description: "La nueva imagen (desde prompt sugerido) ha sido añadida al historial." });
       } else {
         throw new Error("La generación con prompt sugerido falló o no devolvió los datos necesarios.");
@@ -306,7 +294,6 @@ export function ImageCard({
       setIsRegeneratingWithSuggested(false);
     }
   };
-
 
   const suggestionTooltipText = image.suggestedPrompt && image.suggestedPrompt.trim() !== ''
     ? "Actualizar Sugerencias (IA)"
@@ -320,6 +307,8 @@ export function ImageCard({
             {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
           </CardTitle>
         </CardHeader>
+        
+        {/* Image Preview and Zoom Trigger */}
         <Dialog>
           <CardContent className="p-0 relative aspect-square flex-grow">
             {isLoadingImageUrl ? (
@@ -327,12 +316,12 @@ export function ImageCard({
             ) : imageUrl ? (
               <DialogTrigger asChild>
                 <div className="relative w-full h-full cursor-pointer group">
-                  <Image
+                  <NextImage
                     src={imageUrl}
                     alt={image.prompt}
                     fill={true}
                     style={{objectFit: "contain", objectPosition: "left center"}}
-                    data-ai-hint="abstract art"
+                    data-ai-hint="abstract art" // Placeholder hint
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
                     <ZoomIn className="h-10 w-10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
@@ -352,7 +341,7 @@ export function ImageCard({
             </DialogHeader>
             <div className="relative aspect-video max-h-[80vh]">
               {imageUrl && (
-                <Image
+                <NextImage
                   src={imageUrl}
                   alt={image.prompt}
                   fill={true}
@@ -363,6 +352,7 @@ export function ImageCard({
           </DialogContent>
         </Dialog>
 
+        {/* Tags, Collections, Model Info */}
         <div className="p-4 space-y-3">
           <div>
             {image.tags && image.tags.length > 0 && (
@@ -398,6 +388,7 @@ export function ImageCard({
           </div>
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
         </div>
+
         <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -456,7 +447,7 @@ export function ImageCard({
             </TooltipTrigger>
             <TooltipContent><p>Copiar Prompt</p></TooltipContent>
           </Tooltip>
-
+          
           <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -501,7 +492,6 @@ export function ImageCard({
             </Tooltip>
           )}
 
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" onClick={() => setIsDetailsDialogOpen(true)}>
@@ -520,8 +510,8 @@ export function ImageCard({
         onOpenChange={setIsDetailsDialogOpen}
         onUpdateTags={onUpdateTags}
         onToggleFavorite={onToggleFavorite}
+        onImageResized={onImageResized} // Pass new prop
       />
     </TooltipProvider>
   );
 }
-
