@@ -49,7 +49,11 @@ const generateImageFlow = ai.defineFlow(
     }
 
     if (input.aspectRatio && input.aspectRatio.trim() !== '') {
-      finalPrompt = `${finalPrompt}, with an aspect ratio of ${input.aspectRatio}`;
+      if (input.aspectRatio === '1:1') {
+        finalPrompt = `${finalPrompt}, as a perfectly square image (1:1 aspect ratio)`;
+      } else {
+        finalPrompt = `${finalPrompt}, with an aspect ratio of ${input.aspectRatio}`;
+      }
     }
 
     if (input.imageQuality && input.imageQuality.trim() !== '') {
@@ -57,7 +61,6 @@ const generateImageFlow = ai.defineFlow(
       if (input.imageQuality === 'draft') qualityDescriptor = 'draft quality, quick sketch';
       if (input.imageQuality === 'standard') qualityDescriptor = 'standard quality';
       if (input.imageQuality === 'high') qualityDescriptor = 'high quality, detailed';
-      // if (input.imageQuality === 'ultra') qualityDescriptor = 'ultra high quality, highly detailed'; // Potentially too demanding for current model
       finalPrompt = `${finalPrompt}, ${qualityDescriptor}`;
     }
     
