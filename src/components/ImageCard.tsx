@@ -44,55 +44,22 @@ interface ImageCardProps {
   onToggleFavorite: (id: string) => Promise<void>; 
   onDelete: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => Promise<void>;
-  onImageMetaUpdated: (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => void; // Modified prop
+  onImageMetaUpdated: (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => void;
   onImageGenerated: (image: GeneratedImage) => void; 
 }
-
-const artisticStylesList = [
-  { value: 'none', label: 'Ninguno (Por defecto)' },
-  { value: 'Photorealistic', label: 'Fotorrealista' },
-  { value: 'Cartoon', label: 'Dibujo Animado' },
-  { value: 'Watercolor', label: 'Acuarela' },
-  { value: 'Oil Painting', label: 'Pintura al Óleo' },
-  { value: 'Pixel Art', label: 'Pixel Art' },
-  { value: 'Anime', label: 'Anime' },
-  { value: 'Cyberpunk', label: 'Cyberpunk' },
-  { value: 'Fantasy Art', label: 'Arte Fantástico' },
-  { value: 'Abstract', label: 'Abstracto' },
-  { value: 'Impressionistic', label: 'Impresionista'},
-  { value: 'Steampunk', label: 'Steampunk' },
-  { value: 'Vintage Photography', label: 'Fotografía Vintage'},
-  { value: 'Line Art', label: 'Arte Lineal'},
-  { value: '3D Render', label: 'Render 3D'},
-];
-
-const aspectRatiosList = [
-  { value: '1:1', label: 'Cuadrado (1:1)' },
-  { value: '16:9', label: 'Horizontal (16:9)' },
-  { value: '9:16', label: 'Vertical (9:16)' },
-  { value: '4:3', label: 'Paisaje (4:3)' },
-  { value: '3:4', label: 'Retrato (3:4)' },
-];
-
-const imageQualitiesList = [
-  { value: 'draft', label: 'Borrador' },
-  { value: 'standard', label: 'Estándar' },
-  { value: 'high', label: 'Alta' },
-];
-
 
 export function ImageCard({ 
   image, 
   onToggleFavorite, 
   onDelete, 
   onUpdateTags, 
-  onImageMetaUpdated, // Modified prop
+  onImageMetaUpdated,
   onImageGenerated 
 }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
-  const [isSuggesting, setIsSuggesting] = useState(false); // Renamed for clarity
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false); 
 
@@ -134,7 +101,7 @@ export function ImageCard({
       .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt.", variant: "destructive" }));
   };
 
-  const handleSuggestMeta = async () => { // Renamed for clarity
+  const handleSuggestMeta = async () => {
     if (!image.prompt) {
       toast({ title: "Error", description: "El prompt de la imagen está vacío, no se pueden sugerir colecciones/prompt.", variant: "destructive"});
       return;
@@ -156,8 +123,8 @@ export function ImageCard({
             updates.suggestedPrompt = result.suggestedPrompt;
         }
 
-        await updateGeneratedImage(image.id, updates);
-        onImageMetaUpdated(image.id, updates); 
+        await updateGeneratedImage(image.id, updates); // Update DB from client
+        onImageMetaUpdated(image.id, updates); // Update local state
         
         let toastMessage = "Sugerencias procesadas.";
         if (result.suggestedCollections && result.suggestedCollections.length > 0 && result.suggestedPrompt) {
@@ -242,10 +209,6 @@ export function ImageCard({
     }
   };
   
-  const getLabel = (list: {value: string, label: string}[], value?: string) => {
-    return list.find(item => item.value === value)?.label || value || 'N/A';
-  }
-
   return (
     <TooltipProvider>
       <Card className="flex flex-col overflow-hidden shadow-lg h-full">
@@ -330,19 +293,8 @@ export function ImageCard({
               <p className="text-xs text-muted-foreground italic">Ninguna sugerida aún.</p>
             )}
           </div>
-          {image.suggestedPrompt && (
-            <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Prompt Sugerido (IA):</p>
-                <p className="text-xs text-muted-foreground italic truncate" title={image.suggestedPrompt}>
-                    {image.suggestedPrompt.length > 60 ? `${image.suggestedPrompt.substring(0, 60)}...` : image.suggestedPrompt}
-                </p>
-            </div>
-          )}
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
-          {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {getLabel(artisticStylesList, image.artisticStyle)}</p>}
-          {image.aspectRatio && <p className="text-xs text-muted-foreground">Aspecto: {getLabel(aspectRatiosList, image.aspectRatio)}</p>}
-          {image.imageQuality && <p className="text-xs text-muted-foreground">Calidad: {getLabel(imageQualitiesList, image.imageQuality)}</p>}
-          <p className="text-xs text-muted-foreground">Creada: {new Date(image.createdAt).toLocaleDateString()}</p>
+          {/* Removed direct display of: artisticStyle, aspectRatio, imageQuality, createdAt, suggestedPrompt */}
         </div>
         <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
           <Tooltip>
@@ -445,3 +397,5 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
+
+    
