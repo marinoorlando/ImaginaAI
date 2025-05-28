@@ -148,8 +148,8 @@ export function ImageCard({
 
         if (Object.keys(updates).length > 0) {
           console.log(`[ImageCard] Calling updateGeneratedImage for ${image.id} with updates:`, updates);
-          await updateGeneratedImage(image.id, updates);
-          onImageMetaUpdated(image.id, updates);
+          await updateGeneratedImage(image.id, updates); // Update DB from client-side
+          onImageMetaUpdated(image.id, updates); // Update local state
           console.log(`[ImageCard] DB and local state updated for ${image.id}`);
         }
 
@@ -194,7 +194,7 @@ export function ImageCard({
         artisticStyle: image.artisticStyle || 'none',
         aspectRatio: image.aspectRatio || '1:1',
         imageQuality: image.imageQuality || 'standard',
-        initialTags: image.tags,
+        initialTags: image.tags, // Inherit manual tags
       });
 
       if (result.error) {
@@ -220,7 +220,7 @@ export function ImageCard({
           artisticStyle: result.artisticStyle || 'none',
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags || [],
+          tags: result.tags || [], // Tags from action (should include initialTags)
           collections: result.collections || [],
           suggestedPrompt: result.suggestedPrompt || undefined,
           modelUsed: result.modelUsed || 'Desconocido',
@@ -254,9 +254,9 @@ export function ImageCard({
     try {
       const result = await generateImageAction({
         prompt: image.suggestedPrompt,
-        artisticStyle: image.artisticStyle || 'none',
-        aspectRatio: image.aspectRatio || '1:1',
-        imageQuality: image.imageQuality || 'standard',
+        artisticStyle: image.artisticStyle || 'none', // Use original image's style
+        aspectRatio: image.aspectRatio || '1:1',     // Use original image's aspect ratio
+        imageQuality: image.imageQuality || 'standard', // Use original image's quality
         initialTags: image.tags, // Inherit manual tags from original
       });
 
@@ -283,7 +283,7 @@ export function ImageCard({
           artisticStyle: result.artisticStyle || 'none',
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags || [], // Inherited manual tags
+          tags: result.tags || [], // Tags from action (should include initialTags)
           collections: result.collections || [], // New AI collections for this new image
           suggestedPrompt: result.suggestedPrompt || undefined, // New suggested prompt for this new image
           modelUsed: result.modelUsed || 'Desconocido',
@@ -331,7 +331,7 @@ export function ImageCard({
                     src={imageUrl}
                     alt={image.prompt}
                     fill={true}
-                    style={{objectFit: "contain"}}
+                    style={{objectFit: "contain", objectPosition: "left center"}}
                     data-ai-hint="abstract art"
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
@@ -524,3 +524,4 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
+
