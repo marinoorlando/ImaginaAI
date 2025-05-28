@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { GeneratedImage } from '@/lib/types';
-import { X, Tag, Heart, Save, Loader2, Copy } from 'lucide-react'; // Added Copy
+import { X, Tag, Heart, Save, Loader2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ImageDetailsDialogProps {
@@ -227,8 +227,8 @@ export function ImageDetailsDialog({
               )}
 
               <div>
-                <Label htmlFor="tags-input-dialog" className="text-sm font-medium">Etiquetas Manuales</Label>
-                <div className="flex items-center space-x-2 mt-1">
+                <Label htmlFor="tags-input-dialog" className="text-sm font-medium mb-1 block">Etiquetas Manuales</Label>
+                <div className="flex items-center space-x-2">
                     <Tag className="h-4 w-4 text-muted-foreground" />
                     <Input
                         id="tags-input-dialog"
@@ -262,15 +262,15 @@ export function ImageDetailsDialog({
               </div>
 
               <div>
-                <Label className="text-sm font-medium">Colecciones (IA)</Label>
+                <Label className="text-sm font-medium mb-1 block">Colecciones (IA)</Label>
                 {(image.collections && image.collections.length > 0) ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-wrap gap-1">
                     {image.collections.map(col => (
                       <Badge key={`col-dialog-${col}`} variant="outline" className="text-xs border-primary/70 text-primary">{col}</Badge>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground italic mt-1">Ninguna sugerida.</p>
+                  <p className="text-xs text-muted-foreground italic">Ninguna sugerida.</p>
                 )}
               </div>
               
