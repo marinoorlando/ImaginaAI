@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -5,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText } from 'lucide-react'; // Added FileText
+import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
@@ -36,14 +37,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ImageDetailsDialog } from './ImageDetailsDialog'; // New Import
+import { ImageDetailsDialog } from './ImageDetailsDialog'; 
 
 interface ImageCardProps {
   image: GeneratedImage;
-  onToggleFavorite: (id: string) => Promise<void>; // Ensure props are async if parent functions are
+  onToggleFavorite: (id: string) => Promise<void>; 
   onDelete: (id: string) => void;
-  onUpdateTags: (id: string, newTags: string[]) => Promise<void>; // Ensure props are async
-  onCollectionsUpdated: (id: string, newCollections: string[]) => void;
+  onUpdateTags: (id: string, newTags: string[]) => Promise<void>;
+  onImageMetaUpdated: (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => void; // Modified prop
   onImageGenerated: (image: GeneratedImage) => void; 
 }
 
@@ -85,15 +86,15 @@ export function ImageCard({
   onToggleFavorite, 
   onDelete, 
   onUpdateTags, 
-  onCollectionsUpdated,
+  onImageMetaUpdated, // Modified prop
   onImageGenerated 
 }: ImageCardProps) {
   const { toast } = useToast();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
-  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false); // Renamed for clarity
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false); // New state for details dialog
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false); 
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -133,29 +134,43 @@ export function ImageCard({
       .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt.", variant: "destructive" }));
   };
 
-  const handleSuggestCollections = async () => {
+  const handleSuggestMeta = async () => { // Renamed for clarity
     if (!image.prompt) {
-      toast({ title: "Error", description: "El prompt de la imagen está vacío, no se pueden sugerir colecciones.", variant: "destructive"});
+      toast({ title: "Error", description: "El prompt de la imagen está vacío, no se pueden sugerir colecciones/prompt.", variant: "destructive"});
       return;
     }
-    setIsSuggestingTags(true);
+    setIsSuggesting(true);
     console.log(`[ImageCard] Requesting AI suggestions for imageId: ${image.id}, prompt: ${image.prompt}`);
     try {
       const result = await suggestTagsAction({ prompt: image.prompt });
       console.log(`[ImageCard] AI Suggestion Result for imageId ${image.id}:`, result);
 
       if (result.error) {
-        toast({ title: "Error al Sugerir Colecciones", description: result.error, variant: "destructive" });
-      } else if (result.success && result.suggestedCollections) {
-        // Update DB from client-side
-        await updateGeneratedImage(image.id, { collections: result.suggestedCollections });
-        onCollectionsUpdated(image.id, result.suggestedCollections); 
-        
-        if (result.suggestedCollections.length > 0) {
-            toast({ title: "Colecciones Sugeridas", description: "Se añadieron y guardaron nuevas colecciones (IA)." });
-        } else {
-            toast({ title: "Sugerencia Completada", description: "La IA no sugirió nuevas colecciones o las existentes ya son las mejores." });
+        toast({ title: "Error al Sugerir", description: result.error, variant: "destructive" });
+      } else if (result.success) {
+        const updates: { collections?: string[], suggestedPrompt?: string } = {};
+        if (result.suggestedCollections) {
+            updates.collections = result.suggestedCollections;
         }
+        if (result.suggestedPrompt) {
+            updates.suggestedPrompt = result.suggestedPrompt;
+        }
+
+        await updateGeneratedImage(image.id, updates);
+        onImageMetaUpdated(image.id, updates); 
+        
+        let toastMessage = "Sugerencias procesadas.";
+        if (result.suggestedCollections && result.suggestedCollections.length > 0 && result.suggestedPrompt) {
+            toastMessage = "Nuevas colecciones y prompt sugerido por IA guardados.";
+        } else if (result.suggestedCollections && result.suggestedCollections.length > 0) {
+            toastMessage = "Nuevas colecciones sugeridas por IA guardadas.";
+        } else if (result.suggestedPrompt) {
+            toastMessage = "Nuevo prompt sugerido por IA guardado.";
+        } else {
+            toastMessage = "La IA no generó nuevas sugerencias o las existentes ya son las mejores.";
+        }
+        toast({ title: "Sugerencias de IA", description: toastMessage });
+        
       } else {
         toast({ 
             title: "Respuesta Inesperada", 
@@ -164,15 +179,15 @@ export function ImageCard({
         });
       }
     } catch (error) { 
-      console.error(`[ImageCard] Catch block error in handleSuggestCollections for imageId ${image.id}:`, error);
-      const errorMessage = error instanceof Error ? error.message : "Ocurrió un problema al procesar la solicitud de sugerir colecciones.";
+      console.error(`[ImageCard] Catch block error in handleSuggestMeta for imageId ${image.id}:`, error);
+      const errorMessage = error instanceof Error ? error.message : "Ocurrió un problema al procesar la solicitud de sugerencias.";
       toast({ 
           title: "Error Inesperado", 
           description: errorMessage, 
           variant: "destructive" 
       });
     } finally {
-      setIsSuggestingTags(false);
+      setIsSuggesting(false);
     }
   };
 
@@ -205,8 +220,9 @@ export function ImageCard({
           artisticStyle: result.artisticStyle || 'none', 
           aspectRatio: result.aspectRatio || '1:1',
           imageQuality: result.imageQuality || 'standard',
-          tags: result.tags, 
+          tags: result.tags || [], 
           collections: result.collections || [], 
+          suggestedPrompt: result.suggestedPrompt || undefined,
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false, 
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
@@ -238,7 +254,7 @@ export function ImageCard({
             {image.prompt.length > 50 ? `${image.prompt.substring(0, 50)}...` : image.prompt}
           </CardTitle>
         </CardHeader>
-        <Dialog> {/* This Dialog is for image zoom */}
+        <Dialog> 
           <CardContent className="p-0 relative aspect-square flex-grow">
             {isLoadingImageUrl ? (
               <Skeleton className="w-full h-full" />
@@ -279,7 +295,7 @@ export function ImageCard({
               )}
             </div>
           </DialogContent>
-        </Dialog> {/* End of image zoom Dialog */}
+        </Dialog> 
 
         <div className="p-4 space-y-3">
           <div>
@@ -296,7 +312,7 @@ export function ImageCard({
             )}
           </div>
           <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1">Colecciones (IA):</p>
+            <p className="text-xs font-bold text-muted-foreground mb-1">Colecciones (IA):</p>
             {(image.collections && image.collections.length > 0) ? (
               <>
                 <div className="flex flex-wrap gap-1">
@@ -314,6 +330,14 @@ export function ImageCard({
               <p className="text-xs text-muted-foreground italic">Ninguna sugerida aún.</p>
             )}
           </div>
+          {image.suggestedPrompt && (
+            <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">Prompt Sugerido (IA):</p>
+                <p className="text-xs text-muted-foreground italic truncate" title={image.suggestedPrompt}>
+                    {image.suggestedPrompt.length > 60 ? `${image.suggestedPrompt.substring(0, 60)}...` : image.suggestedPrompt}
+                </p>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
           {image.artisticStyle && image.artisticStyle !== 'none' && <p className="text-xs text-muted-foreground">Estilo: {getLabel(artisticStylesList, image.artisticStyle)}</p>}
           {image.aspectRatio && <p className="text-xs text-muted-foreground">Aspecto: {getLabel(aspectRatiosList, image.aspectRatio)}</p>}
@@ -381,12 +405,12 @@ export function ImageCard({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={handleSuggestCollections} disabled={isSuggestingTags}>
-                {isSuggestingTags ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                <span className="sr-only">Sugerir Colecciones (IA)</span>
+              <Button variant="ghost" size="icon" onClick={handleSuggestMeta} disabled={isSuggesting}>
+                {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                <span className="sr-only">Sugerir Colecciones y Prompt (IA)</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent><p>Sugerir Colecciones (IA)</p></TooltipContent>
+            <TooltipContent><p>Sugerir Colecciones y Prompt (IA)</p></TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -411,7 +435,6 @@ export function ImageCard({
         </CardFooter>
       </Card>
       
-      {/* ImageDetailsDialog is rendered here, controlled by its own open state */}
       <ImageDetailsDialog
         image={image}
         open={isDetailsDialogOpen}

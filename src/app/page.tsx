@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -61,17 +62,14 @@ export default function HomePage() {
   const handleToggleFavorite = async (id: string) => {
     try {
       await toggleFavoriteStatus(id);
-      // Optimistic update for immediate UI feedback
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
-      // If favorite filter is active, reload to reflect potential removal/addition from filtered list
       if (currentFilters.isFavorite !== undefined) {
-         loadImages(); // This will fetch from DB and update state
+         loadImages(); 
       }
     } catch (error) {
       toast({ title: "Error", description: "No se pudo actualizar el estado de favorito.", variant: "destructive" });
-      // Re-fetch to ensure consistency if optimistic update was wrong
       loadImages();
     }
   };
@@ -89,26 +87,22 @@ export default function HomePage() {
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
-       // Optimistic update
       setImages(prevImages => 
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
-      // No need to call loadImages() if only tags changed and no tag filter is active.
-      // If tag filtering becomes a feature, then loadImages might be needed here.
     } catch (error) {
       toast({ title: "Error", description: "No se pudieron actualizar las etiquetas manuales.", variant: "destructive" });
-      loadImages(); // Re-fetch on error
+      loadImages(); 
     }
   };
 
-  const handleCollectionsUpdated = (id: string, newCollections: string[]) => {
-    console.log(`[HomePage] handleCollectionsUpdated called for imageId: ${id} with newCollections:`, newCollections);
+  const handleImageMetaUpdated = (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => {
+    console.log(`[HomePage] handleImageMetaUpdated called for imageId: ${id} with updates:`, updates);
     setImages(prevImages =>
       prevImages.map(img =>
-        img.id === id ? { ...img, collections: newCollections, updatedAt: new Date() } : img
+        img.id === id ? { ...img, ...updates, updatedAt: new Date() } : img
       )
     );
-     // The DB update is handled client-side in ImageCard after suggestTagsAction
   };
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
@@ -148,6 +142,7 @@ export default function HomePage() {
           imageData: await blobToDataURI(img.imageData), 
           createdAt: img.createdAt.toISOString(),
           updatedAt: img.updatedAt.toISOString(),
+          suggestedPrompt: img.suggestedPrompt || undefined,
         }))
       );
       
@@ -205,6 +200,7 @@ export default function HomePage() {
               imageData: imageBlob,
               tags: Array.isArray(item.tags) ? item.tags : [],
               collections: Array.isArray(item.collections) ? item.collections : [],
+              suggestedPrompt: typeof item.suggestedPrompt === 'string' ? item.suggestedPrompt : undefined,
               modelUsed: typeof item.modelUsed === 'string' ? item.modelUsed : 'Desconocido',
               isFavorite: typeof item.isFavorite === 'boolean' ? item.isFavorite : false,
               createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
@@ -273,7 +269,7 @@ export default function HomePage() {
               onToggleFavorite={handleToggleFavorite}
               onDeleteImage={handleDeleteImage}
               onUpdateTags={handleUpdateTags}
-              onCollectionsUpdated={handleCollectionsUpdated}
+              onImageMetaUpdated={handleImageMetaUpdated}
               onImageGenerated={handleImageGenerated}
               isLoading={isLoading}
             />

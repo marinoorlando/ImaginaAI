@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { GeneratedImage } from '@/lib/types';
-import { X, Tag, Heart, Save, Loader2 } from 'lucide-react';
+import { X, Tag, Heart, Save, Loader2, Copy } from 'lucide-react'; // Added Copy
 import { useToast } from '@/hooks/use-toast';
 
 interface ImageDetailsDialogProps {
@@ -83,7 +84,6 @@ export function ImageDetailsDialog({
       if (image.imageData instanceof Blob) {
         const url = URL.createObjectURL(image.imageData);
         setImageUrl(url);
-        // Cleanup function to revoke the object URL
         return () => URL.revokeObjectURL(url);
       } else {
         setImageUrl(null);
@@ -107,7 +107,7 @@ export function ImageDetailsDialog({
   const handleAddTag = () => {
     const newTag = tagInput.trim().toLowerCase();
     if (newTag && !editableTags.map(t => t.toLowerCase()).includes(newTag)) {
-      setEditableTags([...editableTags, tagInput.trim()]); // Keep original casing for display
+      setEditableTags([...editableTags, tagInput.trim()]); 
     }
     setTagInput('');
   };
@@ -139,12 +139,12 @@ export function ImageDetailsDialog({
 
   const handleToggleFavoriteSwitch = async (checked: boolean) => {
     if (!image) return;
-    setIsFavoriteSwitch(checked); // Optimistic UI update
+    setIsFavoriteSwitch(checked); 
     try {
       await onToggleFavorite(image.id);
       toast({ title: "Favorito Actualizado" });
     } catch (error) {
-      setIsFavoriteSwitch(!checked); // Revert on error
+      setIsFavoriteSwitch(!checked); 
       toast({ title: "Error al Actualizar Favorito", variant: "destructive" });
     }
   };
@@ -166,6 +166,14 @@ export function ImageDetailsDialog({
     return !currentSorted.every((tag, index) => tag === originalSorted[index]);
   };
 
+  const handleCopySuggestedPrompt = () => {
+    if (image?.suggestedPrompt) {
+      navigator.clipboard.writeText(image.suggestedPrompt)
+        .then(() => toast({ title: "Prompt Sugerido Copiado" }))
+        .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt sugerido.", variant: "destructive" }));
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
@@ -178,7 +186,6 @@ export function ImageDetailsDialog({
         
         <ScrollArea className="flex-grow overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 p-6">
-            {/* Image Preview Section */}
             <div className="space-y-3">
               <div className="aspect-square w-full relative bg-muted rounded-md overflow-hidden shadow">
                 {imageUrl ? (
@@ -196,14 +203,28 @@ export function ImageDetailsDialog({
               </div>
             </div>
 
-            {/* Details & Edit Section */}
             <div className="space-y-4">
               <div>
-                <Label htmlFor="prompt-display" className="text-sm font-medium">Prompt Completo</Label>
+                <Label htmlFor="prompt-display" className="text-sm font-medium">Prompt Original</Label>
                 <ScrollArea className="h-20 w-full rounded-md border p-2 mt-1 text-sm bg-secondary/30">
                   {image.prompt}
                 </ScrollArea>
               </div>
+
+              {image.suggestedPrompt && (
+                <div>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="suggested-prompt-display" className="text-sm font-medium">Prompt Sugerido (IA)</Label>
+                    <Button variant="ghost" size="icon" onClick={handleCopySuggestedPrompt} className="h-6 w-6">
+                      <Copy className="h-3.5 w-3.5" />
+                      <span className="sr-only">Copiar Prompt Sugerido</span>
+                    </Button>
+                  </div>
+                  <ScrollArea className="h-20 w-full rounded-md border p-2 mt-1 text-sm bg-secondary/30">
+                    {image.suggestedPrompt}
+                  </ScrollArea>
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="tags-input-dialog" className="text-sm font-medium">Etiquetas Manuales</Label>

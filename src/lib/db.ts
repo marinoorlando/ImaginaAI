@@ -7,9 +7,8 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(5).stores({ // Incremented version to 5
-      generatedImages: 'id, prompt, *tags, *collections, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality',
-      // Added artisticStyle, aspectRatio, imageQuality
+    this.version(7).stores({ // Incremented version to 7 for suggestedPrompt
+      generatedImages: 'id, prompt, *tags, *collections, suggestedPrompt, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality',
     });
   }
 }
@@ -24,6 +23,7 @@ export async function addGeneratedImage(image: GeneratedImage): Promise<string> 
       ...image,
       tags: image.tags || [],
       collections: image.collections || [],
+      suggestedPrompt: image.suggestedPrompt || undefined,
       artisticStyle: image.artisticStyle || 'none',
       aspectRatio: image.aspectRatio || '1:1',
       imageQuality: image.imageQuality || 'standard',
@@ -62,8 +62,6 @@ export async function getGeneratedImageById(id: string): Promise<GeneratedImage 
 
 export async function updateGeneratedImage(id: string, changes: Partial<Omit<GeneratedImage, 'id' | 'imageData'>>): Promise<number> {
   try {
-    // Note: This function cannot update imageData directly due to the Omit type.
-    // For imageData updates, use a direct Dexie update: db.generatedImages.update(id, { imageData: newBlob, ... })
     return await db.generatedImages.update(id, { ...changes, updatedAt: new Date() });
   } catch (error) {
     console.error(`Failed to update image with id ${id}:`, error);

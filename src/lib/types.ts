@@ -5,6 +5,7 @@ export interface GeneratedImage {
   prompt: string;
   tags: string[];
   collections?: string[]; // AI-suggested tags, called "colecciones"
+  suggestedPrompt?: string; // AI-suggested alternative prompt
   modelUsed: string;
   isFavorite: boolean; 
   createdAt: Date;
@@ -21,6 +22,7 @@ export interface ExportedGeneratedImage extends Omit<GeneratedImage, 'imageData'
   imageData: string; // Base64 data URI
   createdAt: string; // ISO string date
   updatedAt: string; // ISO string date
+  suggestedPrompt?: string;
 }
 
 // For future use with simulated login
@@ -39,3 +41,4 @@ export interface AiModel {
   enabled: boolean;
   apiKey?: string; // Simulated
 }
+

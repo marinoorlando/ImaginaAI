@@ -11,8 +11,8 @@ interface ImageGridProps {
   onToggleFavorite: (id: string) => void;
   onDeleteImage: (id: string) => void;
   onUpdateTags: (id: string, newTags: string[]) => void;
-  onCollectionsUpdated: (id: string, newCollections: string[]) => void;
-  onImageGenerated: (image: GeneratedImage) => void; // Changed from onImageRegenerated
+  onImageMetaUpdated: (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => void; // Modified prop
+  onImageGenerated: (image: GeneratedImage) => void;
   isLoading?: boolean;
 }
 
@@ -21,8 +21,8 @@ export function ImageGrid({
   onToggleFavorite, 
   onDeleteImage, 
   onUpdateTags, 
-  onCollectionsUpdated, 
-  onImageGenerated, // Changed from onImageRegenerated
+  onImageMetaUpdated, // Modified prop
+  onImageGenerated, 
   isLoading 
 }: ImageGridProps) {
   if (isLoading) {
@@ -54,8 +54,8 @@ export function ImageGrid({
           onToggleFavorite={onToggleFavorite}
           onDelete={onDeleteImage}
           onUpdateTags={onUpdateTags}
-          onCollectionsUpdated={onCollectionsUpdated}
-          onImageGenerated={onImageGenerated} // Changed from onImageRegenerated
+          onImageMetaUpdated={onImageMetaUpdated} // Modified prop
+          onImageGenerated={onImageGenerated} 
         />
       ))}
     </div>
