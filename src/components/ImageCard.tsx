@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText, CheckCircle2 } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
@@ -116,15 +116,21 @@ export function ImageCard({
         toast({ title: "Error al Sugerir", description: result.error, variant: "destructive" });
       } else if (result.success) {
         const updates: { collections?: string[], suggestedPrompt?: string } = {};
+        let hasNewSuggestions = false;
+
         if (result.suggestedCollections) {
             updates.collections = result.suggestedCollections;
+            if (result.suggestedCollections.length > 0) hasNewSuggestions = true;
         }
         if (result.suggestedPrompt) {
             updates.suggestedPrompt = result.suggestedPrompt;
+            hasNewSuggestions = true;
         }
-
-        await updateGeneratedImage(image.id, updates); // Update DB from client
-        onImageMetaUpdated(image.id, updates); // Update local state
+        
+        if (Object.keys(updates).length > 0) {
+          await updateGeneratedImage(image.id, updates); 
+          onImageMetaUpdated(image.id, updates); 
+        }
         
         let toastMessage = "Sugerencias procesadas.";
         if (result.suggestedCollections && result.suggestedCollections.length > 0 && result.suggestedPrompt) {
@@ -133,8 +139,8 @@ export function ImageCard({
             toastMessage = "Nuevas colecciones sugeridas por IA guardadas.";
         } else if (result.suggestedPrompt) {
             toastMessage = "Nuevo prompt sugerido por IA guardado.";
-        } else {
-            toastMessage = "La IA no generó nuevas sugerencias o las existentes ya son las mejores.";
+        } else if (!hasNewSuggestions) {
+             toastMessage = "La IA no generó nuevas sugerencias o las existentes ya son las mejores.";
         }
         toast({ title: "Sugerencias de IA", description: toastMessage });
         
@@ -208,6 +214,10 @@ export function ImageCard({
       setIsRegenerating(false);
     }
   };
+
+  const suggestionTooltipText = image.suggestedPrompt && image.suggestedPrompt.trim() !== ''
+    ? "Actualizar Sugerencias (IA)"
+    : "Sugerir Colecciones y Prompt (IA)";
   
   return (
     <TooltipProvider>
@@ -294,7 +304,6 @@ export function ImageCard({
             )}
           </div>
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
-          {/* Removed direct display of: artisticStyle, aspectRatio, imageQuality, createdAt, suggestedPrompt */}
         </div>
         <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
           <Tooltip>
@@ -355,15 +364,27 @@ export function ImageCard({
             <TooltipContent><p>Copiar Prompt</p></TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={handleSuggestMeta} disabled={isSuggesting}>
-                {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                <span className="sr-only">Sugerir Colecciones y Prompt (IA)</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent><p>Sugerir Colecciones y Prompt (IA)</p></TooltipContent>
-          </Tooltip>
+          <div className="flex items-center"> {/* Wrapper for suggestion button and indicator */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleSuggestMeta} disabled={isSuggesting}>
+                  {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                  <span className="sr-only">{suggestionTooltipText}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>{suggestionTooltipText}</p></TooltipContent>
+            </Tooltip>
+            {image.suggestedPrompt && image.suggestedPrompt.trim() !== '' && !isSuggesting && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="ml-0.5 flex items-center justify-center" aria-hidden="true">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent><p>Ya existe un prompt sugerido por IA</p></TooltipContent>
+              </Tooltip>
+            )}
+          </div>
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -397,5 +418,3 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
-
-    
