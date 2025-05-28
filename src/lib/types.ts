@@ -7,15 +7,15 @@ export interface GeneratedImage {
   collections?: string[]; // AI-suggested tags, called "colecciones"
   suggestedPrompt?: string; // AI-suggested alternative prompt
   modelUsed: string;
-  isFavorite: boolean; 
+  isFavorite: boolean;
   createdAt: Date;
   updatedAt: Date;
   width?: number;
   height?: number;
-  originalUrl?: string; 
+  originalUrl?: string;
   artisticStyle?: string;
-  aspectRatio?: string; 
-  imageQuality?: string; 
+  aspectRatio?: string;
+  imageQuality?: string;
 }
 
 export interface ExportedGeneratedImage extends Omit<GeneratedImage, 'imageData' | 'createdAt' | 'updatedAt'> {
@@ -23,13 +23,15 @@ export interface ExportedGeneratedImage extends Omit<GeneratedImage, 'imageData'
   createdAt: string; // ISO string date
   updatedAt: string; // ISO string date
   suggestedPrompt?: string;
+  width?: number;
+  height?: number;
 }
 
 // For future use with simulated login
 export interface SimulatedUser {
   id: string;
   username: string;
-  password?: string; 
+  password?: string;
   role: 'admin' | 'normal';
 }
 
@@ -41,4 +43,3 @@ export interface AiModel {
   enabled: boolean;
   apiKey?: string; // Simulated
 }
-

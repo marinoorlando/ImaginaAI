@@ -7,8 +7,8 @@ export class ImaginaAiDexie extends Dexie {
 
   constructor() {
     super('ImaginaAI_HR_DB');
-    this.version(7).stores({ // Incremented version to 7 for suggestedPrompt
-      generatedImages: 'id, prompt, *tags, *collections, suggestedPrompt, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality',
+    this.version(8).stores({ // Incremented version to 8 for width and height
+      generatedImages: 'id, prompt, *tags, *collections, suggestedPrompt, modelUsed, isFavorite, createdAt, updatedAt, artisticStyle, aspectRatio, imageQuality, width, height',
     });
   }
 }
@@ -29,6 +29,8 @@ export async function addGeneratedImage(image: GeneratedImage): Promise<string> 
       imageQuality: image.imageQuality || 'standard',
       createdAt: image.createdAt || new Date(),
       updatedAt: image.updatedAt || new Date(),
+      width: image.width,
+      height: image.height,
     };
     return await db.generatedImages.add(imageToAdd);
   } catch (error) {
@@ -104,19 +106,19 @@ export async function filterImages({
 
     if (searchTerm && searchTerm.trim() !== '') {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      collection = collection.filter(img => 
+      collection = collection.filter(img =>
         img.prompt.toLowerCase().includes(lowerSearchTerm) ||
         img.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)) ||
         (img.collections && img.collections.some(col => col.toLowerCase().includes(lowerSearchTerm)))
       );
     }
-    
+
     if (tags && tags.length > 0) {
-      collection = collection.filter(img => 
+      collection = collection.filter(img =>
         tags.every(filterTag => img.tags.includes(filterTag))
       );
     }
-    
+
     return await collection.toArray();
   } catch (error) {
     console.error("Failed to filter images:", error);

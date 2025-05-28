@@ -83,7 +83,7 @@ export function ImageDetailsDialog({
     let objectUrl: string | null = null;
 
     if (image) {
-      console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image)));
+      console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image, (key, value) => key === 'imageData' ? 'Blob omitted' : value)));
       console.log('[ImageDetailsDialog] Image tags:', image.tags);
 
       if (image.imageData instanceof Blob) {
@@ -101,7 +101,7 @@ export function ImageDetailsDialog({
     }
 
     return () => {
-      if (objectUrl) { 
+      if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
     };
@@ -117,11 +117,11 @@ export function ImageDetailsDialog({
   const handleAddTag = () => {
     const newTag = tagInput.trim().toLowerCase();
     if (newTag && !editableTags.map(t => t.toLowerCase()).includes(newTag)) {
-      setEditableTags(prev => [...prev, tagInput.trim()]); 
+      setEditableTags(prev => [...prev, tagInput.trim()]);
     }
     setTagInput('');
   };
-  
+
   const handleTagInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === ',' || event.key === 'Enter') {
       event.preventDefault();
@@ -149,16 +149,16 @@ export function ImageDetailsDialog({
 
   const handleToggleFavoriteSwitch = async (checked: boolean) => {
     if (!image) return;
-    setIsFavoriteSwitch(checked); 
+    setIsFavoriteSwitch(checked);
     try {
       await onToggleFavorite(image.id);
       toast({ title: "Favorito Actualizado" });
     } catch (error) {
-      setIsFavoriteSwitch(!checked); 
+      setIsFavoriteSwitch(!checked);
       toast({ title: "Error al Actualizar Favorito", variant: "destructive" });
     }
   };
-  
+
   const formatBytes = (bytes?: number, decimals = 2) => {
     if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -170,20 +170,15 @@ export function ImageDetailsDialog({
 
   const hasTagsChanged = useCallback(() => {
     if (!image) return false;
-
-    const originalTags = image.tags || []; 
+    const originalTags = image.tags || [];
     const currentEditableTags = editableTags || [];
-
     console.log("[hasTagsChanged] Comparing originalTags:", originalTags, "with editableTags:", currentEditableTags);
-
     if (currentEditableTags.length !== originalTags.length) {
       console.log("[hasTagsChanged] Lengths differ. Result: true");
       return true;
     }
-
     const sortedOriginal = [...originalTags].sort();
     const sortedEditable = [...currentEditableTags].sort();
-
     const changed = !sortedEditable.every((tag, index) => tag === sortedOriginal[index]);
     console.log("[hasTagsChanged] Sorted arrays comparison. Result:", changed);
     return changed;
@@ -209,7 +204,7 @@ export function ImageDetailsDialog({
             Visualiza la información completa y edita atributos de la imagen.
           </DialogDescription>
         </DialogHeader>
-        
+
         <ScrollArea className="flex-grow overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 p-6">
             <div className="space-y-3">
@@ -226,6 +221,9 @@ export function ImageDetailsDialog({
                 <p><strong>ID:</strong> <span className="font-mono break-all">{image.id}</span></p>
                 <p><strong>Tipo:</strong> {image.imageData.type || 'N/A'}</p>
                 <p><strong>Tamaño:</strong> {formatBytes(image.imageData.size)}</p>
+                {image.width && image.height && (
+                  <p><strong>Dimensiones:</strong> {image.width} x {image.height} px</p>
+                )}
               </div>
             </div>
 
@@ -286,7 +284,7 @@ export function ImageDetailsDialog({
                   </Button>
                 )}
               </div>
-              
+
 
               <div>
                 <Label className="text-sm font-medium mb-1 block">Colecciones (IA)</Label>
@@ -300,7 +298,7 @@ export function ImageDetailsDialog({
                   <p className="text-xs text-muted-foreground italic">Ninguna sugerida.</p>
                 )}
               </div>
-              
+
               <div className="space-y-2 text-sm pt-2">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   <p><strong>Modelo:</strong> <span className="text-muted-foreground">{image.modelUsed}</span></p>
@@ -327,7 +325,7 @@ export function ImageDetailsDialog({
             </div>
           </div>
         </ScrollArea>
-        
+
         <DialogFooter className="p-4 border-t mt-auto">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
         </DialogFooter>

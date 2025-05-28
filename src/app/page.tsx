@@ -42,7 +42,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, currentFilters]); 
+  }, [toast, currentFilters]);
 
   useEffect(() => {
     loadImages(currentFilters);
@@ -51,7 +51,7 @@ export default function HomePage() {
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
       await addGeneratedImage(newImage);
-      loadImages(); 
+      loadImages();
       toast({ title: "Imagen Guardada", description: "La nueva imagen se ha guardado en el historial." });
     } catch (error) {
       console.error("Error saving new image:", error);
@@ -62,11 +62,11 @@ export default function HomePage() {
   const handleToggleFavorite = async (id: string) => {
     try {
       await toggleFavoriteStatus(id);
-      setImages(prevImages => 
+      setImages(prevImages =>
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
       if (currentFilters.isFavorite !== undefined) {
-         loadImages(); 
+         loadImages();
       }
     } catch (error) {
       toast({ title: "Error", description: "No se pudo actualizar el estado de favorito.", variant: "destructive" });
@@ -83,16 +83,16 @@ export default function HomePage() {
       toast({ title: "Error", description: "No se pudo eliminar la imagen.", variant: "destructive" });
     }
   };
-  
+
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
-      setImages(prevImages => 
+      setImages(prevImages =>
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
     } catch (error) {
       toast({ title: "Error", description: "No se pudieron actualizar las etiquetas manuales.", variant: "destructive" });
-      loadImages(); 
+      loadImages();
     }
   };
 
@@ -117,7 +117,7 @@ export default function HomePage() {
     try {
       await clearAllImages();
       toast({ title: "Historial Eliminado", description: "Todas las imágenes han sido eliminadas." });
-      setImages([]); 
+      setImages([]);
     } catch (error) {
       toast({ title: "Error", description: "No se pudo eliminar el historial.", variant: "destructive" });
     } finally {
@@ -139,13 +139,15 @@ export default function HomePage() {
       const exportedImages: ExportedGeneratedImage[] = await Promise.all(
         allImages.map(async (img) => ({
           ...img,
-          imageData: await blobToDataURI(img.imageData), 
+          imageData: await blobToDataURI(img.imageData),
           createdAt: img.createdAt.toISOString(),
           updatedAt: img.updatedAt.toISOString(),
           suggestedPrompt: img.suggestedPrompt || undefined,
+          width: img.width,
+          height: img.height,
         }))
       );
-      
+
       const jsonString = JSON.stringify(exportedImages, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -182,7 +184,7 @@ export default function HomePage() {
       if (!Array.isArray(importedData)) {
         throw new Error("El archivo de importación no tiene el formato esperado (debe ser un array).");
       }
-      
+
       let importedCount = 0;
       let skippedCount = 0;
 
@@ -193,7 +195,7 @@ export default function HomePage() {
             continue;
         }
         try {
-            const imageBlob = await dataURIToBlob(item.imageData); 
+            const imageBlob = await dataURIToBlob(item.imageData);
             const newImage: GeneratedImage = {
               id: item.id,
               prompt: item.prompt,
@@ -223,11 +225,11 @@ export default function HomePage() {
             }
         }
       }
-      
-      loadImages(); 
-      toast({ 
-        title: "Importación Completada", 
-        description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas (duplicadas o error).` : ''}` 
+
+      loadImages();
+      toast({
+        title: "Importación Completada",
+        description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas (duplicadas o error).` : ''}`
       });
 
     } catch (error) {
@@ -248,7 +250,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AppHeader 
+      <AppHeader
         onClearHistory={openClearHistoryDialog}
         onExportHistory={handleExportHistory}
         onImportHistory={handleImportHistory}
@@ -264,8 +266,8 @@ export default function HomePage() {
             <h2 className="text-2xl font-semibold mb-6 text-foreground">
               Historial de Imágenes {isLoading ? '(Cargando...)' : `(${images.length})`}
             </h2>
-            <ImageGrid 
-              images={images} 
+            <ImageGrid
+              images={images}
               onToggleFavorite={handleToggleFavorite}
               onDeleteImage={handleDeleteImage}
               onUpdateTags={handleUpdateTags}

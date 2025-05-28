@@ -128,10 +128,6 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   }, []);
 
   useEffect(() => {
-    // Update RHF's 'tags' field whenever currentTags (the visual tags) change.
-    // This ensures validation works correctly on submit.
-    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
-    // whenever currentTags changes, providing immediate feedback.
     setValue('tags', currentTags.join(','), { shouldValidate: true });
   }, [currentTags, setValue]);
 
@@ -163,15 +159,32 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
       setCurrentTags(prev => [...prev, tag]);
     }
   };
-  
+
+  const getImageDimensions = (blob: Blob): Promise<{width: number, height: number}> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img');
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.onerror = (err) => {
+        reject(err);
+        URL.revokeObjectURL(objectUrl);
+      };
+      img.src = objectUrl;
+    });
+  };
+
   async function onSubmit(data: FormData) {
     setIsGenerating(true);
     try {
-      const result = await generateImageAction({ 
-        prompt: data.prompt, 
+      const result = await generateImageAction({
+        prompt: data.prompt,
         artisticStyle: data.artisticStyle,
         aspectRatio: data.aspectRatio,
         imageQuality: data.imageQuality,
+        initialTags: currentTags,
       });
 
       if (result.error) {
@@ -189,7 +202,13 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           throw new Error(`Failed to process image data URI: ${fetchRes.statusText}`);
         }
         const imageBlob = await fetchRes.blob();
-        
+        let dimensions = { width: undefined, height: undefined };
+        try {
+            dimensions = await getImageDimensions(imageBlob);
+        } catch (dimError) {
+            console.warn("Could not determine image dimensions:", dimError);
+        }
+
         const newImage: GeneratedImage = {
           id: result.id || uuidv4(),
           imageData: imageBlob,
@@ -197,13 +216,15 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           artisticStyle: result.artisticStyle || data.artisticStyle || 'none',
           aspectRatio: result.aspectRatio || data.aspectRatio || '1:1',
           imageQuality: result.imageQuality || data.imageQuality || 'standard',
-          tags: currentTags, 
-          collections: result.collections || [], 
+          tags: result.tags || [],
+          collections: result.collections || [],
           suggestedPrompt: result.suggestedPrompt || undefined,
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
           updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
+          width: dimensions.width,
+          height: dimensions.height,
         };
 
         onImageGenerated(newImage);
@@ -214,8 +235,8 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           title: "¡Imagen Generada!",
           description: "La imagen ha sido añadida a tu historial.",
         });
-        reset(); 
-        setCurrentTags([]); 
+        reset();
+        setCurrentTags([]);
       } else if (result.success && !result.imageDataUri) {
         throw new Error("Image generation reported success but no image data was returned.");
       }
@@ -369,7 +390,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
               <div className="flex items-center space-x-2">
                   <Tag className="h-5 w-5 text-muted-foreground" />
                   {/* Hidden input for RHF to manage the 'tags' field for validation */}
-                  <input type="hidden" {...register("tags")} /> 
+                  <input type="hidden" {...register("tags")} />
                   <Input
                       id="tags-input"
                       type="text"
@@ -436,5 +457,3 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     </TooltipProvider>
   );
 }
-
-    
