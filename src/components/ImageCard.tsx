@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText, CheckCircle2 } from 'lucide-react';
+import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2, ZoomIn, FileText, CheckCircle2, Lightbulb } from 'lucide-react';
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions'; 
@@ -61,6 +61,7 @@ export function ImageCard({
   const [isLoadingImageUrl, setIsLoadingImageUrl] = useState(true);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRegeneratingWithSuggested, setIsRegeneratingWithSuggested] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false); 
 
   useEffect(() => {
@@ -166,7 +167,7 @@ export function ImageCard({
 
   const handleRegenerate = async () => {
     setIsRegenerating(true);
-    toast({ title: "Generando nueva imagen...", description: "Usando el prompt y estilo actual. Por favor espera." });
+    toast({ title: "Generando nueva imagen...", description: "Usando el prompt original. Por favor espera." });
     try {
       const result = await generateImageAction({
         prompt: image.prompt,
@@ -203,17 +204,73 @@ export function ImageCard({
         };
         
         onImageGenerated(newImageEntry); 
-        toast({ title: "Nueva Imagen Generada", description: "La nueva imagen ha sido añadida al historial." });
+        toast({ title: "Nueva Imagen Generada", description: "La nueva imagen (desde prompt original) ha sido añadida al historial." });
       } else {
         throw new Error("La generación falló o no devolvió los datos necesarios.");
       }
     } catch (error) {
-      console.error("Error regenerating as new image:", error);
+      console.error("Error regenerating as new image (original prompt):", error);
       toast({ title: "Error", description: error instanceof Error ? error.message : "Ocurrió un problema al generar la nueva imagen.", variant: "destructive" });
     } finally {
       setIsRegenerating(false);
     }
   };
+
+  const handleRegenerateWithSuggestedPrompt = async () => {
+    if (!image.suggestedPrompt) {
+      toast({ title: "Error", description: "No hay prompt sugerido para esta imagen.", variant: "destructive" });
+      return;
+    }
+    setIsRegeneratingWithSuggested(true);
+    toast({ title: "Generando nueva imagen...", description: "Usando el prompt sugerido por IA. Por favor espera." });
+    try {
+      const result = await generateImageAction({
+        prompt: image.suggestedPrompt,
+        artisticStyle: image.artisticStyle || 'none',
+        aspectRatio: image.aspectRatio || '1:1',
+        imageQuality: image.imageQuality || 'standard',
+        initialTags: image.tags, // Inherit manual tags from original
+      });
+
+      if (result.error) {
+        toast({ title: "Error de Generación", description: result.error, variant: "destructive" });
+        return;
+      }
+
+      if (result.success && result.imageDataUri && result.id) {
+        const fetchRes = await fetch(result.imageDataUri);
+        if (!fetchRes.ok) throw new Error("Falló al obtener el Data URI de la nueva imagen.");
+        const newImageBlob = await fetchRes.blob();
+        
+        const newImageEntry: GeneratedImage = {
+          id: result.id, 
+          imageData: newImageBlob,
+          prompt: result.prompt, // This will be the suggested prompt
+          artisticStyle: result.artisticStyle || 'none', 
+          aspectRatio: result.aspectRatio || '1:1',
+          imageQuality: result.imageQuality || 'standard',
+          tags: result.tags || [], // Inherited manual tags
+          collections: result.collections || [], // New AI collections for this new image
+          suggestedPrompt: result.suggestedPrompt || undefined, // New suggested prompt for this new image
+          modelUsed: result.modelUsed || 'Desconocido',
+          isFavorite: false, 
+          createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
+          updatedAt: result.updatedAt ? new Date(result.updatedAt) : new Date(),
+        };
+        
+        onImageGenerated(newImageEntry); 
+        toast({ title: "Nueva Imagen Generada", description: "La nueva imagen (desde prompt sugerido) ha sido añadida al historial." });
+      } else {
+        throw new Error("La generación con prompt sugerido falló o no devolvió los datos necesarios.");
+      }
+    } catch (error) {
+      console.error("Error regenerating with suggested prompt:", error);
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Ocurrió un problema al generar la nueva imagen con el prompt sugerido.", variant: "destructive" });
+    } finally {
+      setIsRegeneratingWithSuggested(false);
+    }
+  };
+
 
   const suggestionTooltipText = image.suggestedPrompt && image.suggestedPrompt.trim() !== ''
     ? "Actualizar Sugerencias (IA)"
@@ -364,7 +421,7 @@ export function ImageCard({
             <TooltipContent><p>Copiar Prompt</p></TooltipContent>
           </Tooltip>
 
-          <div className="flex items-center"> {/* Wrapper for suggestion button and indicator */}
+          <div className="flex items-center">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={handleSuggestMeta} disabled={isSuggesting}>
@@ -390,11 +447,24 @@ export function ImageCard({
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" onClick={handleRegenerate} disabled={isRegenerating}>
                 {isRegenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                <span className="sr-only">Regenerar como Nueva Imagen</span>
+                <span className="sr-only">Regenerar como Nueva Imagen (Prompt Original)</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent><p>Regenerar como Nueva Imagen</p></TooltipContent>
+            <TooltipContent><p>Regenerar como Nueva Imagen (Prompt Original)</p></TooltipContent>
           </Tooltip>
+          
+          {image.suggestedPrompt && image.suggestedPrompt.trim() !== '' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleRegenerateWithSuggestedPrompt} disabled={isRegeneratingWithSuggested}>
+                  {isRegeneratingWithSuggested ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
+                  <span className="sr-only">Regenerar como Nueva Imagen (Prompt Sugerido)</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Regenerar como Nueva Imagen (Prompt Sugerido)</p></TooltipContent>
+            </Tooltip>
+          )}
+
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -418,3 +488,4 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
+
