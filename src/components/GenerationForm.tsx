@@ -22,8 +22,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectGroup,
-  SelectLabel
 } from "@/components/ui/select";
 import {
   Tooltip,
@@ -34,7 +32,7 @@ import {
 
 
 const formSchema = z.object({
-  prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(500, { message: "El prompt no puede exceder los 500 caracteres." }),
+  prompt: z.string().min(5, { message: "El prompt debe tener al menos 5 caracteres." }).max(700, { message: "El prompt no puede exceder los 700 caracteres." }),
   tags: z.string().min(1, { message: "Se requiere al menos una etiqueta." }),
   artisticStyle: z.string().optional(),
   aspectRatio: z.string().optional(),
@@ -130,6 +128,10 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
   }, []);
 
   useEffect(() => {
+    // Update RHF's 'tags' field whenever currentTags (the visual tags) change.
+    // This ensures validation works correctly on submit.
+    // `shouldValidate: true` ensures that RHF re-validates the 'tags' field
+    // whenever currentTags changes, providing immediate feedback.
     setValue('tags', currentTags.join(','), { shouldValidate: true });
   }, [currentTags, setValue]);
 
@@ -197,6 +199,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
           imageQuality: result.imageQuality || data.imageQuality || 'standard',
           tags: currentTags, 
           collections: result.collections || [], 
+          suggestedPrompt: result.suggestedPrompt || undefined,
           modelUsed: result.modelUsed || 'Desconocido',
           isFavorite: false,
           createdAt: result.createdAt ? new Date(result.createdAt) : new Date(),
@@ -268,7 +271,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
                 )}
               </div>
               {errors.prompt && <p className="text-sm text-destructive">{errors.prompt.message}</p>}
-              <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 500</p>
+              <p className="text-xs text-muted-foreground text-right">{promptValue?.length || 0} / 700</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -365,6 +368,7 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
               <Label htmlFor="tags-input">Etiquetas (manuales, separadas por coma o Enter)</Label>
               <div className="flex items-center space-x-2">
                   <Tag className="h-5 w-5 text-muted-foreground" />
+                  {/* Hidden input for RHF to manage the 'tags' field for validation */}
                   <input type="hidden" {...register("tags")} /> 
                   <Input
                       id="tags-input"
@@ -432,3 +436,5 @@ export function GenerationForm({ onImageGenerated }: GenerationFormProps) {
     </TooltipProvider>
   );
 }
+
+    
