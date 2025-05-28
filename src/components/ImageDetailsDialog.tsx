@@ -83,7 +83,7 @@ export function ImageDetailsDialog({
     let objectUrl: string | null = null;
 
     if (image) {
-      console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image))); // Log a deep copy for better inspection
+      console.log('[ImageDetailsDialog] Image received:', JSON.parse(JSON.stringify(image)));
       console.log('[ImageDetailsDialog] Image tags:', image.tags);
 
       if (image.imageData instanceof Blob) {
@@ -101,7 +101,7 @@ export function ImageDetailsDialog({
     }
 
     return () => {
-      if (objectUrl) { // Revoke the specific objectUrl created in this effect run
+      if (objectUrl) { 
         URL.revokeObjectURL(objectUrl);
       }
     };
@@ -117,7 +117,7 @@ export function ImageDetailsDialog({
   const handleAddTag = () => {
     const newTag = tagInput.trim().toLowerCase();
     if (newTag && !editableTags.map(t => t.toLowerCase()).includes(newTag)) {
-      setEditableTags([...editableTags, tagInput.trim()]); 
+      setEditableTags(prev => [...prev, tagInput.trim()]); 
     }
     setTagInput('');
   };
@@ -168,13 +168,26 @@ export function ImageDetailsDialog({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   };
 
-  const hasTagsChanged = () => {
+  const hasTagsChanged = useCallback(() => {
     if (!image) return false;
-    if (editableTags.length !== image.tags.length) return true;
-    const currentSorted = [...editableTags].sort();
-    const originalSorted = [...image.tags].sort();
-    return !currentSorted.every((tag, index) => tag === originalSorted[index]);
-  };
+
+    const originalTags = image.tags || []; 
+    const currentEditableTags = editableTags || [];
+
+    console.log("[hasTagsChanged] Comparing originalTags:", originalTags, "with editableTags:", currentEditableTags);
+
+    if (currentEditableTags.length !== originalTags.length) {
+      console.log("[hasTagsChanged] Lengths differ. Result: true");
+      return true;
+    }
+
+    const sortedOriginal = [...originalTags].sort();
+    const sortedEditable = [...currentEditableTags].sort();
+
+    const changed = !sortedEditable.every((tag, index) => tag === sortedOriginal[index]);
+    console.log("[hasTagsChanged] Sorted arrays comparison. Result:", changed);
+    return changed;
+  }, [image, editableTags]);
 
   const handleCopySuggestedPrompt = () => {
     if (image?.suggestedPrompt) {
@@ -183,6 +196,9 @@ export function ImageDetailsDialog({
         .catch(() => toast({ title: "Error", description: "No se pudo copiar el prompt sugerido.", variant: "destructive" }));
     }
   };
+
+  const showSaveButton = hasTagsChanged();
+  console.log("[Render Save Button?] hasTagsChanged() is:", showSaveButton);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,41 +252,39 @@ export function ImageDetailsDialog({
                 </div>
               )}
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="tags-input-dialog" className="text-sm font-medium mb-1 block">Etiquetas Manuales</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                      <Tag className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                          id="tags-input-dialog"
-                          type="text"
-                          placeholder="Añadir etiqueta..."
-                          value={tagInput}
-                          onChange={handleTagInputChange}
-                          onKeyDown={handleTagInputKeyDown}
-                          className="h-8 text-sm flex-grow"
-                      />
-                      <Button variant="outline" size="sm" onClick={handleAddTag} className="h-8">Añadir</Button>
-                  </div>
-                  {editableTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {editableTags.map(tag => (
-                        <Badge key={tag} variant="secondary" className="text-xs flex items-center">
-                          {tag}
-                          <button type="button" onClick={() => removeTag(tag)} className="ml-1 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {hasTagsChanged() && (
-                     <Button size="sm" onClick={handleSaveTags} disabled={isSavingTags} className="mt-2 text-xs h-8">
-                      {isSavingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                      Guardar Etiquetas
-                    </Button>
-                  )}
+                <div className="flex items-center space-x-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                        id="tags-input-dialog"
+                        type="text"
+                        placeholder="Añadir etiqueta..."
+                        value={tagInput}
+                        onChange={handleTagInputChange}
+                        onKeyDown={handleTagInputKeyDown}
+                        className="h-8 text-sm flex-grow"
+                    />
+                    <Button variant="outline" size="sm" onClick={handleAddTag} className="h-8">Añadir</Button>
                 </div>
+                {editableTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {editableTags.map(tag => (
+                      <Badge key={tag} variant="secondary" className="text-xs flex items-center">
+                        {tag}
+                        <button type="button" onClick={() => removeTag(tag)} className="ml-1 text-muted-foreground hover:text-foreground" aria-label={`Remover etiqueta ${tag}`}>
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {showSaveButton && (
+                   <Button size="sm" onClick={handleSaveTags} disabled={isSavingTags} className="mt-2 text-xs h-8">
+                    {isSavingTags ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                    Guardar Etiquetas
+                  </Button>
+                )}
               </div>
               
 
@@ -321,6 +335,3 @@ export function ImageDetailsDialog({
     </Dialog>
   );
 }
-
-
-    
