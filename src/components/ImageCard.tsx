@@ -122,15 +122,19 @@ export function ImageCard({
         if (result.suggestedCollections) {
             updates.collections = result.suggestedCollections;
             if (result.suggestedCollections.length > 0) hasNewSuggestions = true;
+            console.log(`[ImageCard]Collections to update for ${image.id}:`, result.suggestedCollections);
         }
         if (result.suggestedPrompt) {
             updates.suggestedPrompt = result.suggestedPrompt;
             hasNewSuggestions = true;
+            console.log(`[ImageCard]Suggested prompt to update for ${image.id}:`, result.suggestedPrompt);
         }
         
         if (Object.keys(updates).length > 0) {
+          console.log(`[ImageCard] Calling updateGeneratedImage for ${image.id} with updates:`, updates);
           await updateGeneratedImage(image.id, updates); 
           onImageMetaUpdated(image.id, updates); 
+          console.log(`[ImageCard] DB and local state updated for ${image.id}`);
         }
         
         let toastMessage = "Sugerencias procesadas.";
@@ -320,7 +324,7 @@ export function ImageCard({
                   src={imageUrl}
                   alt={image.prompt}
                   fill={true}
-                  style={{objectFit: "contain"}}
+                  style={{objectFit: "contain", objectPosition: "left center"}}
                 />
               )}
             </div>
