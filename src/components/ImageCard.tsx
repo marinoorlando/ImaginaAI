@@ -364,25 +364,7 @@ export function ImageCard({
               </>
             )}
           </div>
-          <div>
-            <p className="text-xs font-bold text-muted-foreground mb-1">Colecciones (IA):</p>
-            {(image.collections && image.collections.length > 0) ? (
-              <>
-                <div className="flex flex-wrap gap-1">
-                  {(image.collections || []).slice(0, 3).map(col => (
-                    <Badge key={`col-${col}`} variant="outline" className="text-xs border-primary text-primary">{col}</Badge>
-                  ))}
-                </div>
-                {(image.collections || []).length > 3 && (
-                  <div className="mt-1">
-                    <Badge variant="outline" className="text-xs">+{ (image.collections || []).length - 3}</Badge>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">Ninguna sugerida aún.</p>
-            )}
-          </div>
+          {/* Colecciones (IA) section removed from here */}
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
         </div>
 
