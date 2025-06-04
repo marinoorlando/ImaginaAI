@@ -288,22 +288,24 @@ export default function HomePage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
             <GenerationForm onImageGenerated={handleImageGenerated} />
-            <FilterControls onFilterChange={handleFilterChange} />
           </div>
-          <div className="lg:col-span-2">
-            <h2 className="text-2xl font-semibold mb-6 text-foreground">
-              Historial de Imágenes {isLoading ? '(Cargando...)' : `(${images.length})`}
-            </h2>
-            <ImageGrid
-              images={images}
-              onToggleFavorite={handleToggleFavorite}
-              onDeleteImage={handleDeleteImage}
-              onUpdateTags={handleUpdateTags}
-              onImageMetaUpdated={handleImageMetaUpdated}
-              onImageGenerated={handleImageGenerated} 
-              onImageResized={handleImageResized} 
-              isLoading={isLoading}
-            />
+          <div className="lg:col-span-2 space-y-6">
+            <FilterControls onFilterChange={handleFilterChange} />
+            <div>
+              <h2 className="text-2xl font-semibold text-foreground">
+                Historial de Imágenes {isLoading ? '(Cargando...)' : `(${images.length})`}
+              </h2>
+              <ImageGrid
+                images={images}
+                onToggleFavorite={handleToggleFavorite}
+                onDeleteImage={handleDeleteImage}
+                onUpdateTags={handleUpdateTags}
+                onImageMetaUpdated={handleImageMetaUpdated}
+                onImageGenerated={handleImageGenerated} 
+                onImageResized={handleImageResized} 
+                isLoading={isLoading}
+              />
+            </div>
           </div>
         </div>
       </main>
@@ -347,4 +349,5 @@ export default function HomePage() {
       />
     </div>
   );
-}
+
+    
