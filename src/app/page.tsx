@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { GenerationForm } from '@/components/GenerationForm';
 import { ImageGrid } from '@/components/ImageGrid';
 import { FilterControls } from '@/components/FilterControls';
+import { PaginationControls } from '@/components/PaginationControls'; // Import PaginationControls
 import type { GeneratedImage, ExportedGeneratedImage } from '@/lib/types';
 import { db, addGeneratedImage, getAllGeneratedImages, toggleFavoriteStatus, deleteGeneratedImage, updateGeneratedImage, filterImages, clearAllImages } from '@/lib/db';
 import { useToast } from "@/hooks/use-toast";
@@ -31,27 +32,36 @@ export default function HomePage() {
   const [isStatisticsDialogOpen, setIsStatisticsDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters) => {
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [totalImagesCount, setTotalImagesCount] = useState(0);
+
+  const loadImages = useCallback(async (filters: { searchTerm?: string; isFavorite?: true | undefined } = currentFilters, page = currentPage, limit = itemsPerPage) => {
     setIsLoading(true);
     try {
-      const fetchedImages = await filterImages(filters);
+      const { images: fetchedImages, totalCount } = await filterImages({ ...filters, page, limit });
       setImages(fetchedImages);
+      setTotalImagesCount(totalCount);
     } catch (error) {
       console.error("Error loading images:", error);
       toast({ title: "Error", description: "No se pudieron cargar las imágenes.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [toast, currentFilters]); // Added currentFilters as dependency
+  }, [toast, currentPage, itemsPerPage]); // Removed currentFilters from here, will be handled by useEffect
 
   useEffect(() => {
-    loadImages(currentFilters);
-  }, [loadImages, currentFilters]);
+    loadImages(currentFilters, currentPage, itemsPerPage);
+  }, [loadImages, currentFilters, currentPage, itemsPerPage]);
 
   const handleImageGenerated = async (newImage: GeneratedImage) => {
     try {
       await addGeneratedImage(newImage);
-      loadImages(); // Reload all images to reflect the new one, including filters
+      // Reset to first page to show the new image, assuming default sort is newest first
+      // Or simply reload current page and filters, new image might not be on current page depending on sort
+      if (currentPage !== 1) setCurrentPage(1); // Go to first page to see the latest
+      else loadImages(currentFilters, 1, itemsPerPage); // Reload first page if already there
       toast({ title: "Imagen Guardada", description: "La nueva imagen se ha guardado en el historial." });
     } catch (error) {
       console.error("Error saving new image:", error);
@@ -62,16 +72,17 @@ export default function HomePage() {
   const handleToggleFavorite = async (id: string) => {
     try {
       await toggleFavoriteStatus(id);
-      // Optimistically update UI, then reload if filters are active
+      // Optimistically update UI
       setImages(prevImages =>
         prevImages.map(img => img.id === id ? { ...img, isFavorite: !img.isFavorite, updatedAt: new Date() } : img)
       );
+      // If "Show Only Favorites" is active/inactive, a full reload might be needed to reflect counts correctly
       if (currentFilters.isFavorite !== undefined) {
-         loadImages(); // Reload if "Show Only Favorites" is active/inactive
+         loadImages(currentFilters, currentPage, itemsPerPage); 
       }
     } catch (error) {
       toast({ title: "Error", description: "No se pudo actualizar el estado de favorito.", variant: "destructive" });
-      loadImages(); // Reload all on error to ensure consistency
+      loadImages(currentFilters, currentPage, itemsPerPage); // Reload on error
     }
   };
 
@@ -79,7 +90,10 @@ export default function HomePage() {
     try {
       await deleteGeneratedImage(id);
       toast({ title: "Imagen Eliminada", description: "La imagen ha sido eliminada del historial." });
-      loadImages(); // Reload all images
+      // After delete, we might be on an empty page or a page that no longer exists
+      // A common strategy is to reload the current page, or go to prev page if current is now empty
+      // For simplicity, just reload. A more advanced logic could check if current page becomes empty.
+      loadImages(currentFilters, currentPage, itemsPerPage);
     } catch (error) {
       toast({ title: "Error", description: "No se pudo eliminar la imagen.", variant: "destructive" });
     }
@@ -88,32 +102,37 @@ export default function HomePage() {
   const handleUpdateTags = async (id: string, newTags: string[]) => {
     try {
       await updateGeneratedImage(id, { tags: newTags });
-      // Optimistic update
       setImages(prevImages =>
         prevImages.map(img => img.id === id ? { ...img, tags: newTags, updatedAt: new Date() } : img)
       );
     } catch (error) {
       toast({ title: "Error", description: "No se pudieron actualizar las etiquetas manuales.", variant: "destructive" });
-      loadImages(); // Reload all on error
+      loadImages(currentFilters, currentPage, itemsPerPage);
     }
   };
 
-  // Updated to handle both collections and suggestedPrompt
   const handleImageMetaUpdated = (id: string, updates: { collections?: string[], suggestedPrompt?: string }) => {
-    console.log(`[HomePage] handleImageMetaUpdated called for imageId: ${id} with updates:`, updates);
-    // Optimistic update for UI responsiveness
     setImages(prevImages =>
       prevImages.map(img =>
         img.id === id ? { ...img, ...updates, updatedAt: new Date() } : img
       )
     );
-    // The actual DB update is handled client-side within ImageCard after suggestTagsAction
   };
 
   const handleFilterChange = (filters: { searchTerm?: string; isFavorite?: true | undefined }) => {
     setCurrentFilters(filters);
-    // loadImages will be triggered by useEffect dependency on currentFilters
+    setCurrentPage(1); // Reset to first page on filter change
   };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page
+  };
+
 
   const openClearHistoryDialog = () => {
     setIsClearHistoryDialogOpen(true);
@@ -123,7 +142,9 @@ export default function HomePage() {
     try {
       await clearAllImages();
       toast({ title: "Historial Eliminado", description: "Todas las imágenes han sido eliminadas." });
-      setImages([]); // Clear images locally
+      setImages([]); 
+      setTotalImagesCount(0);
+      setCurrentPage(1);
     } catch (error) {
       toast({ title: "Error", description: "No se pudo eliminar el historial.", variant: "destructive" });
     } finally {
@@ -135,17 +156,17 @@ export default function HomePage() {
     try {
       setIsLoading(true);
       toast({ title: "Exportando...", description: "Preparando el historial para la descarga." });
-      const allImages = await getAllGeneratedImages();
-      if (allImages.length === 0) {
+      const allImagesToExport = await getAllGeneratedImages(); // Fetches all, not paginated
+      if (allImagesToExport.length === 0) {
         toast({ title: "Historial Vacío", description: "No hay imágenes para exportar." });
         setIsLoading(false);
         return;
       }
 
       const exportedImages: ExportedGeneratedImage[] = await Promise.all(
-        allImages.map(async (img) => ({
+        allImagesToExport.map(async (img) => ({
           ...img,
-          imageData: await blobToDataURI(img.imageData), // Convert Blob to Data URI
+          imageData: await blobToDataURI(img.imageData), 
           createdAt: img.createdAt.toISOString(),
           updatedAt: img.updatedAt.toISOString(),
           suggestedPrompt: img.suggestedPrompt || undefined,
@@ -174,7 +195,7 @@ export default function HomePage() {
   };
 
   const handleImportHistory = () => {
-    fileInputRef.current?.click(); // Trigger hidden file input
+    fileInputRef.current?.click(); 
   };
 
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,7 +206,7 @@ export default function HomePage() {
       setIsLoading(true);
       toast({ title: "Importando...", description: "Procesando el archivo de historial." });
       const fileContent = await file.text();
-      const importedData: any[] = JSON.parse(fileContent); // Parse as any initially for validation
+      const importedData: any[] = JSON.parse(fileContent); 
 
       if (!Array.isArray(importedData)) {
         throw new Error("El archivo de importación no tiene el formato esperado (debe ser un array).");
@@ -195,14 +216,13 @@ export default function HomePage() {
       let skippedCount = 0;
 
       for (const item of importedData) {
-        // Basic validation for core fields
         if (typeof item.id !== 'string' || typeof item.prompt !== 'string' || typeof item.imageData !== 'string') {
             console.warn("Skipping invalid item during import:", item);
             skippedCount++;
             continue;
         }
         try {
-            const imageBlob = await dataURIToBlob(item.imageData); // Convert Data URI back to Blob
+            const imageBlob = await dataURIToBlob(item.imageData); 
             const newImage: GeneratedImage = {
               id: item.id,
               prompt: item.prompt,
@@ -223,18 +243,18 @@ export default function HomePage() {
             await addGeneratedImage(newImage);
             importedCount++;
         } catch (addError: any) {
-             // Check for Dexie's ConstraintError for duplicate IDs
              if (addError?.name === 'ConstraintError') {
                 console.warn(`Image with ID ${item.id} already exists. Skipping.`);
                 skippedCount++;
             } else {
                 console.error(`Error adding imported image ${item.id}:`, addError);
-                skippedCount++; // Count other errors as skipped too
+                skippedCount++; 
             }
         }
       }
 
-      loadImages(); // Reload all images to reflect imported ones
+      setCurrentPage(1); // Go to first page after import
+      loadImages(currentFilters, 1, itemsPerPage);
       toast({
         title: "Importación Completada",
         description: `${importedCount} imágenes importadas. ${skippedCount > 0 ? `${skippedCount} omitidas (duplicadas o error).` : ''}`
@@ -246,7 +266,6 @@ export default function HomePage() {
       toast({ title: "Error de Importación", description: message, variant: "destructive" });
     } finally {
       setIsLoading(false);
-      // Reset file input to allow importing the same file again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -254,6 +273,10 @@ export default function HomePage() {
   };
 
   const openStatisticsDialog = () => {
+    // To get stats for ALL images, not just current page, we fetch them all here
+    // This could be slow if there are thousands of images.
+    // For now, let's pass the currently loaded (paginated) images for performance.
+    // If stats for all images are critical, this needs a separate fetch.
     setIsStatisticsDialogOpen(true);
   };
 
@@ -261,20 +284,19 @@ export default function HomePage() {
     try {
       await updateGeneratedImage(id, { imageData: newBlob, width, height });
       toast({ title: "Imagen Actualizada", description: "La imagen ha sido redimensionada y guardada." });
-      // Efficiently update the specific image in the local state
       setImages(prevImages =>
         prevImages.map(img =>
           img.id === id ? { ...img, imageData: newBlob, width, height, updatedAt: new Date() } : img
         )
       );
-       // If you want to ensure all filters/sorts are re-applied after resize, uncomment:
-       // loadImages();
     } catch (error) {
       console.error("Error updating resized image in DB:", error);
       toast({ title: "Error al Guardar", description: "No se pudo guardar la imagen redimensionada.", variant: "destructive" });
-      loadImages(); // Full reload on error to ensure consistency
+      loadImages(currentFilters, currentPage, itemsPerPage);
     }
   };
+
+  const totalPages = Math.ceil(totalImagesCount / itemsPerPage);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -292,9 +314,18 @@ export default function HomePage() {
           <div className="lg:col-span-2 space-y-6">
             <FilterControls onFilterChange={handleFilterChange} />
             <div>
-              <h2 className="text-2xl font-semibold text-foreground">
-                Historial de Imágenes {isLoading ? '(Cargando...)' : `(${images.length})`}
+              <h2 className="text-2xl font-semibold text-foreground mb-1">
+                Historial de Imágenes
               </h2>
+               <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                itemsPerPage={itemsPerPage}
+                onItemsPerPageChange={handleItemsPerPageChange}
+                totalItems={totalImagesCount}
+                isLoading={isLoading}
+              />
               <ImageGrid
                 images={images}
                 onToggleFavorite={handleToggleFavorite}
@@ -305,6 +336,19 @@ export default function HomePage() {
                 onImageResized={handleImageResized} 
                 isLoading={isLoading}
               />
+              {totalImagesCount > itemsPerPage && ( // Show pagination at bottom only if multiple pages
+                 <div className="mt-6">
+                    <PaginationControls
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                        itemsPerPage={itemsPerPage}
+                        onItemsPerPageChange={handleItemsPerPageChange}
+                        totalItems={totalImagesCount}
+                        isLoading={isLoading}
+                    />
+                 </div>
+              )}
             </div>
           </div>
         </div>
@@ -313,7 +357,6 @@ export default function HomePage() {
         Imagina AI HR &copy; {new Date().getFullYear()}
       </footer>
 
-      {/* Clear History Dialog */}
       <AlertDialog open={isClearHistoryDialogOpen} onOpenChange={setIsClearHistoryDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -332,14 +375,12 @@ export default function HomePage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Statistics Dialog */}
       <StatisticsDialog
         open={isStatisticsDialogOpen}
         onOpenChange={setIsStatisticsDialogOpen}
-        images={images}
+        images={images} // Passes currently loaded (paginated) images
       />
 
-      {/* Hidden File Input for Import */}
       <input
         type="file"
         ref={fileInputRef}
@@ -349,5 +390,4 @@ export default function HomePage() {
       />
     </div>
   );
-
-    
+}

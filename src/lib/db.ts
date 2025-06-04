@@ -93,37 +93,49 @@ export async function filterImages({
   searchTerm,
   tags,
   isFavorite,
+  page = 1,
+  limit = 12,
 }: {
   searchTerm?: string;
   tags?: string[];
   isFavorite?: true | undefined;
-}): Promise<GeneratedImage[]> {
+  page?: number;
+  limit?: number;
+}): Promise<{ images: GeneratedImage[]; totalCount: number }>{
   try {
-    let collection = db.generatedImages.orderBy('createdAt').reverse();
+    // Base query for filtering and ordering
+    let baseQuery = db.generatedImages.orderBy('createdAt').reverse();
 
+    // Apply filters
     if (isFavorite !== undefined) {
-      collection = collection.filter(img => img.isFavorite === isFavorite);
+      baseQuery = baseQuery.filter(img => img.isFavorite === isFavorite);
     }
 
     if (searchTerm && searchTerm.trim() !== '') {
       const lowerSearchTerm = searchTerm.toLowerCase();
-      collection = collection.filter(img =>
+      baseQuery = baseQuery.filter(img =>
         img.prompt.toLowerCase().includes(lowerSearchTerm) ||
-        img.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm)) ||
+        (img.tags && img.tags.some(tag => tag.toLowerCase().includes(lowerSearchTerm))) ||
         (img.collections && img.collections.some(col => col.toLowerCase().includes(lowerSearchTerm)))
       );
     }
 
     if (tags && tags.length > 0) {
-      collection = collection.filter(img =>
-        tags.every(filterTag => img.tags.includes(filterTag))
+      baseQuery = baseQuery.filter(img =>
+        tags.every(filterTag => img.tags && img.tags.includes(filterTag))
       );
     }
 
-    return await collection.toArray();
+    // Get total count of filtered items
+    const totalCount = await baseQuery.count();
+
+    // Get paginated items
+    const images = await baseQuery.offset((page - 1) * limit).limit(limit).toArray();
+
+    return { images, totalCount };
   } catch (error) {
-    console.error("Failed to filter images:", error);
-    return [];
+    console.error("Failed to filter images with pagination:", error);
+    return { images: [], totalCount: 0 };
   }
 }
 
