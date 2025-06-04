@@ -56,6 +56,10 @@ export function PaginationControls({
   const startItem = totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
+  const countTextLoading = totalItems > 0 ? `Cargando... (Mostrando ${startItem}-${endItem} de ${totalItems} (Total: ${totalItems}) imágenes)` : 'Cargando...';
+  const countTextDisplay = totalItems > 0 ? `Mostrando ${startItem}-${endItem} de ${totalItems} (Total: ${totalItems}) imágenes` : 'No hay imágenes que coincidan.';
+
+
   if (isLoading && totalItems === 0) { // Skeleton loader when initially loading and no items yet
     return (
       <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-card border rounded-lg shadow mb-6 space-y-2 sm:space-y-0">
@@ -76,46 +80,44 @@ export function PaginationControls({
     );
   }
   
-  // Do not render if not loading and there are no items or only one page of items
-  if (!isLoading && totalItems <= itemsPerPage && totalPages <=1) {
-    if (totalItems > 0) { // Show simplified info if there are few items on one page
-      return (
-        <div className="flex items-center justify-between p-4 bg-card border rounded-lg shadow mb-6">
-          <span className="text-sm text-muted-foreground">
-            {totalItems === 1 ? '1 resultado' : `${totalItems} resultados`}
-          </span>
-           <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground hidden md:inline">Resultados por página:</span>
-              <Select
-                  value={String(itemsPerPage)}
-                  onValueChange={(value) => onItemsPerPageChange(Number(value))}
-                  disabled={isLoading}
-              >
-                  <SelectTrigger className="w-[70px] h-9">
-                  <SelectValue placeholder={itemsPerPage} />
-                  </SelectTrigger>
-                  <SelectContent>
-                  {ITEMS_PER_PAGE_OPTIONS.map(option => (
-                      <SelectItem key={option} value={String(option)}>{option}</SelectItem>
-                  ))}
-                  </SelectContent>
-              </Select>
-          </div>
-        </div>
-      );
-    }
-    return null; 
+  // Logic for when to show simplified controls (only items per page selector and count text)
+  // vs full pagination buttons.
+  // This condition means: if not loading, AND (either no items OR items fit on one page AND there's only one page calculated)
+  if (!isLoading && (totalItems === 0 || (totalItems > 0 && totalItems <= itemsPerPage && totalPages <= 1))) {
+    return (
+      <div className="flex items-center justify-between p-4 bg-card border rounded-lg shadow mb-6">
+        <span className="text-sm text-muted-foreground">
+          {/* Use the consistent countTextDisplay even for few items if totalItems > 0 */}
+          {totalItems > 0 ? countTextDisplay : 'No hay imágenes para mostrar.'}
+        </span>
+        {totalItems > 0 && ( // Only show items per page selector if there are items
+            <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground hidden md:inline">Resultados por página:</span>
+                <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(value) => onItemsPerPageChange(Number(value))}
+                    disabled={isLoading}
+                >
+                    <SelectTrigger className="w-[70px] h-9">
+                    <SelectValue placeholder={itemsPerPage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                    {ITEMS_PER_PAGE_OPTIONS.map(option => (
+                        <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                    ))}
+                    </SelectContent>
+                </Select>
+            </div>
+        )}
+      </div>
+    );
   }
 
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-card border rounded-lg shadow mb-6 space-y-2 sm:space-y-0">
       <div className="text-sm text-muted-foreground">
-        {isLoading && totalItems > 0 ? ( // Show "Cargando..." if loading but there were previous items
-          `Cargando... (Mostrando ${startItem}-${endItem} de ${totalItems} imágenes)`
-        ) : (
-          totalItems > 0 ? `Mostrando ${startItem}-${endItem} de ${totalItems} imágenes` : 'No hay imágenes que coincidan.'
-        )}
+        {isLoading && totalItems > 0 ? countTextLoading : countTextDisplay}
       </div>
       <div className="flex items-center space-x-1 sm:space-x-2">
         <div className="flex items-center space-x-1">
@@ -184,3 +186,4 @@ export function PaginationControls({
     </div>
   );
 }
+
