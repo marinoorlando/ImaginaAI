@@ -1,8 +1,8 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import NextImage from 'next/image'; // Renamed to avoid conflict with HTMLImageElement
+import React, { useState, useEffect, useRef } from 'react';
+import NextImage from 'next/image'; 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,7 @@ import { Heart, Download, Trash2, Copy, RefreshCw, AlertTriangle, Loader2, Wand2
 import type { GeneratedImage } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { suggestTagsAction, generateImageAction } from '@/actions/imageActions';
-import { updateGeneratedImage } from '@/lib/db'; // Used directly for client-side DB ops
+import { updateGeneratedImage } from '@/lib/db'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +67,12 @@ export function ImageCard({
   
   const [isFullImageViewOpen, setIsFullImageViewOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartCoordsRef = useRef({ x: 0, y: 0 });
+  const panStartOffsetRef = useRef({ x: 0, y: 0 });
+  const [currentPanOffset, setCurrentPanOffset] = useState({ x: 0, y: 0 });
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -88,9 +94,43 @@ export function ImageCard({
 
   useEffect(() => {
     if (!isFullImageViewOpen) {
-      setZoomLevel(1); // Reset zoom when dialog closes
+      setZoomLevel(1); 
+      setCurrentPanOffset({ x: 0, y: 0 });
+      setIsPanning(false);
     }
   }, [isFullImageViewOpen]);
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (event: MouseEvent) => {
+      if (!isPanning) return;
+      const dx = event.clientX - panStartCoordsRef.current.x;
+      const dy = event.clientY - panStartCoordsRef.current.y;
+      setCurrentPanOffset({
+        x: panStartOffsetRef.current.x + dx,
+        y: panStartOffsetRef.current.y + dy,
+      });
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+      }
+    };
+
+    if (isPanning) {
+      window.addEventListener('mousemove', handleGlobalMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isPanning]);
+
 
   const handleWheelZoom = (event: React.WheelEvent<HTMLDivElement>) => {
     if (!isFullImageViewOpen) return;
@@ -99,13 +139,29 @@ export function ImageCard({
     const zoomSpeed = 0.1;
     let newZoomLevel = zoomLevel;
 
-    if (event.deltaY < 0) { // Scrolling up
-      newZoomLevel = Math.min(zoomLevel + zoomSpeed, 5); // Max zoom 500%
-    } else { // Scrolling down
-      newZoomLevel = Math.max(zoomLevel - zoomSpeed, 0.2); // Min zoom 20%
+    if (event.deltaY < 0) { 
+      newZoomLevel = Math.min(zoomLevel + zoomSpeed, 5); 
+    } else { 
+      newZoomLevel = Math.max(zoomLevel - zoomSpeed, 0.2); 
     }
     setZoomLevel(newZoomLevel);
   };
+
+  const handleMouseDownOnImage = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || zoomLevel <= 1) return; // Only pan on left click and if zoomed in
+    event.preventDefault();
+    setIsPanning(true);
+    panStartCoordsRef.current = { x: event.clientX, y: event.clientY };
+    panStartOffsetRef.current = currentPanOffset;
+  };
+
+  let cursorStyle = 'zoom-in';
+  if (zoomLevel > 1) {
+    cursorStyle = isPanning ? 'grabbing' : 'grab';
+  } else if (zoomLevel < 1 && zoomLevel !== 1) { // Check explicitly not 1 for zoom-out
+    cursorStyle = 'zoom-out';
+  }
+
 
   const getImageDimensions = (blob: Blob): Promise<{width: number, height: number}> => {
     return new Promise((resolve, reject) => {
@@ -343,7 +399,8 @@ export function ImageCard({
                     alt={image.prompt}
                     fill={true}
                     style={{objectFit: "contain", objectPosition: "center center"}}
-                    data-ai-hint="abstract art" 
+                    data-ai-hint="abstract art"
+                    priority 
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-opacity duration-200">
                     <ZoomIn className="h-10 w-10 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
@@ -364,9 +421,11 @@ export function ImageCard({
               <DialogTitle className="text-sm truncate">{image.prompt}</DialogTitle>
             </DialogHeader>
             <div 
-              className="relative aspect-video max-h-[80vh] overflow-hidden"
+              ref={imageContainerRef}
+              className="relative aspect-video max-h-[80vh] overflow-hidden select-none"
               onWheel={handleWheelZoom}
-              style={{ cursor: zoomLevel === 1 ? 'zoom-in' : (zoomLevel < 1 ? 'zoom-out' : 'grab') }}
+              onMouseDown={handleMouseDownOnImage}
+              style={{ cursor: cursorStyle }}
             >
               {imageUrl && (
                 <NextImage
@@ -376,13 +435,13 @@ export function ImageCard({
                   style={{
                     objectFit: "contain",
                     objectPosition: "left center",
-                    transform: `scale(${zoomLevel})`,
+                    transform: `translate(${currentPanOffset.x}px, ${currentPanOffset.y}px) scale(${zoomLevel})`,
                     transformOrigin: 'left center',
-                    transition: 'transform 0.1s ease-out',
+                    transition: isPanning ? 'none' : 'transform 0.1s ease-out',
                     cursor: 'inherit',
-                    width: '100%',
-                    height: '100%'
                   }}
+                  draggable={false}
+                  priority
                 />
               )}
             </div>
@@ -536,3 +595,4 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
+
