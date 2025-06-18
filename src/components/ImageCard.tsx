@@ -64,6 +64,9 @@ export function ImageCard({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isRegeneratingWithSuggested, setIsRegeneratingWithSuggested] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  
+  const [isFullImageViewOpen, setIsFullImageViewOpen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -82,6 +85,27 @@ export function ImageCard({
       }
     };
   }, [image.imageData, image.id]);
+
+  useEffect(() => {
+    if (!isFullImageViewOpen) {
+      setZoomLevel(1); // Reset zoom when dialog closes
+    }
+  }, [isFullImageViewOpen]);
+
+  const handleWheelZoom = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!isFullImageViewOpen) return;
+
+    event.preventDefault();
+    const zoomSpeed = 0.1;
+    let newZoomLevel = zoomLevel;
+
+    if (event.deltaY < 0) { // Scrolling up
+      newZoomLevel = Math.min(zoomLevel + zoomSpeed, 5); // Max zoom 500%
+    } else { // Scrolling down
+      newZoomLevel = Math.max(zoomLevel - zoomSpeed, 0.2); // Min zoom 20%
+    }
+    setZoomLevel(newZoomLevel);
+  };
 
   const getImageDimensions = (blob: Blob): Promise<{width: number, height: number}> => {
     return new Promise((resolve, reject) => {
@@ -307,7 +331,7 @@ export function ImageCard({
           </CardTitle>
         </CardHeader>
         
-        <Dialog>
+        <Dialog open={isFullImageViewOpen} onOpenChange={setIsFullImageViewOpen}>
           <CardContent className="p-0 relative aspect-square flex-grow">
             {isLoadingImageUrl ? (
               <Skeleton className="w-full h-full" />
@@ -333,17 +357,32 @@ export function ImageCard({
               </div>
             )}
           </CardContent>
-          <DialogContent className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] xl:max-w-[50vw] p-2">
+          <DialogContent 
+            className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] xl:max-w-[50vw] p-2"
+          >
             <DialogHeader className="p-2 border-b">
               <DialogTitle className="text-sm truncate">{image.prompt}</DialogTitle>
             </DialogHeader>
-            <div className="relative aspect-video max-h-[80vh]">
+            <div 
+              className="relative aspect-video max-h-[80vh] overflow-hidden"
+              onWheel={handleWheelZoom}
+              style={{ cursor: zoomLevel === 1 ? 'zoom-in' : (zoomLevel < 1 ? 'zoom-out' : 'grab') }}
+            >
               {imageUrl && (
                 <NextImage
                   src={imageUrl}
                   alt={image.prompt}
                   fill={true}
-                  style={{objectFit: "contain", objectPosition: "left center"}}
+                  style={{
+                    objectFit: "contain",
+                    objectPosition: "left center",
+                    transform: `scale(${zoomLevel})`,
+                    transformOrigin: 'left center',
+                    transition: 'transform 0.1s ease-out',
+                    cursor: 'inherit',
+                    width: '100%',
+                    height: '100%'
+                  }}
                 />
               )}
             </div>
@@ -364,8 +403,11 @@ export function ImageCard({
               </>
             )}
           </div>
-          {/* Colecciones (IA) section removed from here */}
           <p className="text-xs text-muted-foreground pt-1">Modelo: {image.modelUsed}</p>
+          <p className="text-xs text-muted-foreground">
+            Aspecto: {image.aspectRatio}, Calidad: {image.imageQuality}
+            {image.width && image.height && `, Dim: ${image.width}x${image.height}`}
+          </p>
         </div>
 
         <CardFooter className="p-2 border-t flex flex-wrap gap-1 justify-center items-center">
@@ -494,4 +536,3 @@ export function ImageCard({
     </TooltipProvider>
   );
 }
-
