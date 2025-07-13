@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo } from 'react';
@@ -14,8 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import type { GeneratedImage } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from './ui/badge';
+import { BarChart2 } from 'lucide-react'; // Importar el ícono
 
 interface StatisticsDialogProps {
   open: boolean;
@@ -92,14 +92,14 @@ export function StatisticsDialog({ open, onOpenChange, images }: StatisticsDialo
 
   const ChartComponent = ({ data, dataKey, fill }: { data: CountData[], dataKey: string, fill: string }) => (
     <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+      <RechartsBarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis type="number" />
         <YAxis type="category" dataKey="name" width={120} interval={0} style={{fontSize: '0.8rem'}}/>
         <Tooltip />
         <Legend />
         <Bar dataKey="count" name={dataKey} fill={fill} barSize={20}/>
-      </BarChart>
+      </RechartsBarChart>
     </ResponsiveContainer>
   );
 
